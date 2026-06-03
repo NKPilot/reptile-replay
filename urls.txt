@@ -1,0 +1,22 @@
+# ReptiReplay 爬宠视频数据源
+# 每行一个 YouTube URL，# 开头为注释
+
+# === 蜕皮 (shedding) ===
+https://www.youtube.com/watch?v=cmqwcb1fh_0
+https://www.youtube.com/watch?v=xDiL2zIFYuA
+https://www.youtube.com/watch?v=YQDhlGjHQNI
+
+# === 进食/捕食 (feeding/strike) ===
+https://www.youtube.com/watch?v=AZkF6yUMmiA
+https://www.youtube.com/watch?v=oEbmX56MvTA
+https://www.youtube.com/watch?v=A60pUv3lbnE
+
+# === 移动/探索 (moving/exploring) ===
+https://www.youtube.com/watch?v=CMArZkC7SQc
+https://www.youtube.com/watch?v=mPQnyIVQerw
+https://www.youtube.com/watch?v=rfJpsGfCgS0
+
+# === 交配/接触 (contact/mating) ===
+https://www.youtube.com/watch?v=PQvDfarQZbg
+https://www.youtube.com/watch?v=TST0AuFlJmY
+https://www.youtube.com/watch?v=gkysuFJIrR4

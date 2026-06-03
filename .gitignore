@@ -1,0 +1,27 @@
+# uv
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Data
+data/raw/
+data/downloads/
+data/clips/
+data/events/
+data/results/
+data/annotations/
+data/uploads/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

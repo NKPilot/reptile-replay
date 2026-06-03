@@ -1,0 +1,17 @@
+[project]
+name = "reptireplay"
+version = "0.1.0"
+description = "爬宠关键行为识别与自动剪辑系统"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "yt-dlp>=2024.1.0",
+    "pyyaml>=6.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.6",
+]
+
+[dependency-groups]
+dev = []

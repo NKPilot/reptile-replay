@@ -1,0 +1,55 @@
+# 爬宠行为标签配置
+labels:
+  0: resting
+  1: moving
+  2: feeding_or_strike
+  3: shedding
+  4: contact_mating_like
+  5: unknown
+
+# 中文映射
+label_cn:
+  resting: "静止/休息"
+  moving: "普通移动"
+  feeding_or_strike: "进食/捕食"
+  shedding: "蜕皮"
+  contact_mating_like: "接触/疑似交配"
+  unknown: "未知/不可用"
+
+# 自动标注规则（基于运动分析）
+auto_label_rules:
+  resting:
+    desc: "几乎没有明显运动"
+    max_motion: 0.05       # 运动强度阈值（归一化后）
+    
+  moving:
+    desc: "持续的中等强度运动"
+    min_motion: 0.05
+    max_motion: 0.35
+    min_duration_ratio: 0.6  # 窗口内运动帧占比
+    
+  feeding_or_strike_candidate:
+    desc: "短时间运动面积/强度突然增大"
+    min_peak_motion: 0.35
+    peak_ratio: 2.0          # 峰值/均值比
+    max_peak_duration: 0.3   # 峰值持续时间占比
+    
+  contact_mating_like_candidate:
+    desc: "多个运动区域靠近或重叠"
+    min_motion_regions: 2
+    region_overlap_threshold: 0.3
+    
+  shedding_candidate:
+    desc: "低速长时间运动+局部纹理变化"
+    min_motion: 0.02
+    max_motion: 0.15
+    min_sustained_ratio: 0.8
+    note: "纯运动检测难以识别蜕皮，误报率高"
+
+# 自动筛选规则（usable/bad）
+screen_rules:
+  blur_threshold: 50.0        # Laplacian方差阈值，低于此值视为模糊
+  min_motion_frames: 3        # 5秒clip中最少需要多少帧有运动（8fps*5s=40帧）
+  max_text_area_ratio: 0.3    # 文字区域最大占比
+  max_scene_cuts: 3           # 5秒内最大切镜次数
+  min_usable_score: 2         # 综合得分阈值（满足usable条件的数量）
