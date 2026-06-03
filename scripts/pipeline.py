@@ -24,10 +24,12 @@
 
 import argparse
 import csv
+import json
 import os
 import subprocess
 import sys
 import time
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -91,24 +93,28 @@ def show_summary():
 
     # 筛选统计
     screen_csv = PROJECT_ROOT / "data" / "clips" / "screen_result.csv"
+    screen_rows = []
     if screen_csv.exists():
         with open(screen_csv) as f:
             reader = csv.DictReader(f)
-            rows = list(reader)
-        usable = sum(1 for r in rows if r["classification"] == "usable")
-        bad = sum(1 for r in rows if r["classification"] == "bad")
-        unknown = sum(1 for r in rows if r["classification"] == "unknown")
+            screen_rows = list(reader)
+        usable = sum(1 for r in screen_rows if r["classification"] == "usable")
+        bad = sum(1 for r in screen_rows if r["classification"] == "bad")
+        unknown = sum(1 for r in screen_rows if r["classification"] == "unknown")
+        human = sum(1 for r in screen_rows if r.get("has_human") == "true")
         print(f"  筛选: {usable} usable / {bad} bad / {unknown} unknown")
+        if human > 0:
+            print(f"    含人物镜头: {human} (已自动标记 bad)")
 
     # 标注统计
     labels_csv = PROJECT_ROOT / "data" / "annotations" / "auto_labels.csv"
+    labels_rows = []
     if labels_csv.exists():
         with open(labels_csv) as f:
             reader = csv.DictReader(f)
-            rows = list(reader)
-        print(f"  标注: {len(rows)} 个 clips 已标注")
-        from collections import Counter
-        labels = Counter(r["auto_label"] for r in rows)
+            labels_rows = list(reader)
+        print(f"  标注: {len(labels_rows)} 个 clips 已标注")
+        labels = Counter(r["auto_label"] for r in labels_rows)
         for label, count in labels.most_common():
             print(f"    - {label}: {count}")
 
@@ -116,6 +122,97 @@ def show_summary():
     print(f"    筛选结果: {screen_csv}")
     print(f"    标注结果: {labels_csv}")
     print(f"    Clips:    {PROJECT_ROOT / 'data' / 'clips'}")
+
+    # 返回统计数据供 save_history 使用
+    return screen_rows, labels_rows
+
+
+def save_history(screen_rows: list, labels_rows: list, started_at: datetime):
+    """保存本次管线执行的历史记录"""
+    history_dir = PROJECT_ROOT / "data" / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    elapsed = (datetime.now() - started_at).total_seconds()
+    run_id = f"run_{started_at.strftime('%Y%m%d_%H%M%S')}"
+
+    # 统计分类
+    cls_counter = Counter(r.get("classification", "unknown") for r in screen_rows)
+    label_counter = Counter(r.get("auto_label", "unknown") for r in labels_rows)
+
+    # 收集母视频信息
+    source_titles = []
+    raw_dir = PROJECT_ROOT / "data" / "raw"
+    if raw_dir.exists():
+        for info_file in sorted(raw_dir.glob("*/*.info.json")):
+            try:
+                with open(info_file) as f:
+                    info = json.load(f)
+                title = info.get("title", info_file.parent.name)
+                if len(title) > 60:
+                    title = title[:57] + "..."
+                source_titles.append(title)
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+    # 构建 clips 列表（合并筛选 + 标注信息）
+    # 建立标注索引
+    labels_index = {}
+    for lbl in labels_rows:
+        abs_path = lbl.get("clip_path", "")
+        rel = abs_path.removeprefix(str(PROJECT_ROOT / "data" / "clips")).lstrip("/")
+        if rel:
+            labels_index[rel] = lbl
+
+    clips_list = []
+    for scr in screen_rows:
+        rel_path = scr.get("clip_path", "").removeprefix("data/clips/").lstrip("/")
+        lbl = labels_index.get(rel_path, {})
+        parts = rel_path.split("/")
+        vid = parts[0] if parts else "unknown"
+
+        clips_list.append({
+            "clip_path": rel_path,
+            "video_id": vid,
+            "clip_name": Path(rel_path).stem,
+            "classification": scr.get("classification", "unknown"),
+            "score": int(scr.get("score", 0)),
+            "auto_label": lbl.get("auto_label", "unknown"),
+            "label_cn": lbl.get("label_cn", "未知"),
+            "confidence": float(lbl.get("confidence", 0)),
+            "peak_motion": float(scr.get("peak_motion", 0)),
+            # 人物检测
+            "has_human": scr.get("has_human", "false") == "true",
+            "human_method": scr.get("human_method", ""),
+            # v2 增强特征
+            "direction_consistency": float(lbl.get("direction_consistency", 0)),
+            "dominant_direction_stability": float(lbl.get("dominant_direction_stability", 0)),
+            "texture_change_rate": float(lbl.get("texture_change_rate", 0)),
+            "baseline_motion": float(lbl.get("baseline_motion", 0)),
+            "norm_avg_intensity": float(lbl.get("norm_avg_intensity", 0)),
+            "norm_peak_intensity": float(lbl.get("norm_peak_intensity", 0)),
+        })
+
+    record = {
+        "run_id": run_id,
+        "processed_at": started_at.isoformat(),
+        "source_video_count": len(source_titles),
+        "source_titles": source_titles,
+        "total_clips": len(screen_rows),
+        "usable_clips": cls_counter.get("usable", 0),
+        "bad_clips": cls_counter.get("bad", 0),
+        "unknown_clips": cls_counter.get("unknown", 0),
+        "human_clips": sum(1 for c in clips_list if c.get("has_human")),
+        "label_distribution": dict(label_counter.most_common()),
+        "duration_seconds": round(elapsed, 1),
+        "clips": clips_list,
+    }
+
+    hist_file = history_dir / f"{run_id}.json"
+    with open(hist_file, "w") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
+
+    print(f"\n  📜 历史记录已保存: {hist_file.name}")
+    return run_id
 
 
 def main():
@@ -219,17 +316,17 @@ def main():
             print("\n提示: 未指定输入且 data/raw 为空，跳过切片步骤")
 
     # ============================================================
-    # Step 3: 自动筛选
+    # Step 3: 自动筛选（含人物检测）
     # ============================================================
     if not args.skip_screen:
         if args.dry_run:
-            print(f"\n[预览] 将对所有 clips 进行自动筛选")
+            print(f"\n[预览] 将对所有 clips 进行自动筛选（含人物检测）")
         else:
             cmd = [
                 *_PYTHON_RUN, str(SCRIPTS_DIR / "screen_clips.py"),
                 "--clips-dir", str(PROJECT_ROOT / "data" / "clips"),
             ]
-            if not run_step("自动筛选 (模糊/字幕/切镜检测)", cmd):
+            if not run_step("自动筛选 (模糊/字幕/切镜/人物检测)", cmd):
                 print("筛选步骤失败，但继续标注步骤")
 
     # ============================================================
@@ -263,7 +360,8 @@ def main():
     print(f"{'='*60}")
 
     if not args.dry_run:
-        show_summary()
+        screen_rows, labels_rows = show_summary()
+        save_history(screen_rows, labels_rows, started_at)
 
 
 if __name__ == "__main__":

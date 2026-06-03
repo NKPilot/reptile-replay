@@ -90,9 +90,19 @@ export interface ClipItem {
   avg_motion: number
   peak_motion: number
   reasons: string
+  // 人物检测
+  has_human: boolean
+  // 标注字段
   auto_label: string
   label_cn: string
   confidence: number
+  // v2 增强特征
+  direction_consistency: number
+  dominant_direction_stability: number
+  texture_change_rate: number
+  baseline_motion: number
+  norm_avg_intensity: number
+  norm_peak_intensity: number
   source_video: SourceVideo | null
   clip_url: string
 }
@@ -157,5 +167,46 @@ export async function importSource(sourceVideoId: string): Promise<{
 }> {
   const res = await fetch(`${BASE}/videos/import-source/${sourceVideoId}`, { method: 'POST' })
   if (!res.ok) throw new Error((await res.json()).detail || '导入失败')
+  return res.json()
+}
+
+// ========== History API ==========
+
+export interface HistoryRecord {
+  run_id: string
+  processed_at: string
+  source_video_count: number
+  source_titles: string[]
+  total_clips: number
+  usable_clips: number
+  bad_clips: number
+  unknown_clips: number
+  label_distribution: Record<string, number>
+  duration_seconds: number
+}
+
+export interface HistoryDetail extends HistoryRecord {
+  human_clips: number
+  clips: {
+    clip_path: string
+    video_id: string
+    clip_name: string
+    classification: string
+    score: number
+    auto_label: string
+    label_cn: string
+    confidence: number
+    peak_motion: number
+    has_human: boolean
+  }[]
+}
+
+export async function listHistory(): Promise<{ history: HistoryRecord[] }> {
+  const res = await fetch(`${BASE}/clips/history`)
+  return res.json()
+}
+
+export async function getHistoryDetail(runId: string): Promise<HistoryDetail> {
+  const res = await fetch(`${BASE}/clips/history/${runId}`)
   return res.json()
 }

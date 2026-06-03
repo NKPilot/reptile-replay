@@ -42,7 +42,10 @@ export default function EventCard({ event, onReview }: Props) {
         </div>
 
         <div className="event-body">
-          <div className={`type-badge ${event.type}`}>{event.label}</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className={`type-badge ${event.type}`}>{event.label}</div>
+            {(event as any).has_human && <span className="cls-badge cls-human">👤 含人物</span>}
+          </div>
           <div className="event-meta">
             <span>⏱ {formatTime(event.start)} ~ {formatTime(event.end)}</span>
             <span>📐 {(event.end - event.start).toFixed(1)}s</span>

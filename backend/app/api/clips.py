@@ -136,10 +136,19 @@ async def list_clips(
             "avg_motion": float(scr.get("avg_motion", 0)),
             "peak_motion": float(scr.get("peak_motion", 0)),
             "reasons": scr.get("reasons", ""),
+            # 人物检测
+            "has_human": scr.get("has_human", "false") == "true",
             # 标注字段
             "auto_label": auto_label,
             "label_cn": label_cn,
             "confidence": round(confidence, 2),
+            # 增强特征 (v2: 光流方向 + 纹理)
+            "direction_consistency": round(float(lbl.get("direction_consistency", 0)), 3),
+            "dominant_direction_stability": round(float(lbl.get("dominant_direction_stability", 0)), 3),
+            "texture_change_rate": round(float(lbl.get("texture_change_rate", 0)), 4),
+            "baseline_motion": round(float(lbl.get("baseline_motion", 0)), 6),
+            "norm_avg_intensity": round(float(lbl.get("norm_avg_intensity", 0)), 4),
+            "norm_peak_intensity": round(float(lbl.get("norm_peak_intensity", 0)), 4),
             # 母视频
             "source_video": src,
             # 播放 URL
@@ -194,3 +203,50 @@ async def list_sources():
         })
 
     return {"sources": sorted(result, key=lambda x: -x["total_clips"])}
+
+
+# ============================================================
+# 剪辑历史 API
+# ============================================================
+HISTORY_DIR = PROJECT_ROOT / "data" / "history"
+
+
+@router.get("/history")
+async def list_history():
+    """列出所有管线执行历史记录（摘要）"""
+    if not HISTORY_DIR.exists():
+        return {"history": []}
+
+    records = []
+    for hist_file in sorted(HISTORY_DIR.glob("*.json"), reverse=True):
+        try:
+            with open(hist_file) as f:
+                rec = json.load(f)
+            # 只返回摘要字段（不含 clips 列表）
+            records.append({
+                "run_id": rec.get("run_id", hist_file.stem),
+                "processed_at": rec.get("processed_at", ""),
+                "source_video_count": rec.get("source_video_count", 0),
+                "source_titles": rec.get("source_titles", []),
+                "total_clips": rec.get("total_clips", 0),
+                "usable_clips": rec.get("usable_clips", 0),
+                "bad_clips": rec.get("bad_clips", 0),
+                "unknown_clips": rec.get("unknown_clips", 0),
+                "label_distribution": rec.get("label_distribution", {}),
+                "duration_seconds": rec.get("duration_seconds", 0),
+            })
+        except (json.JSONDecodeError, KeyError):
+            continue
+
+    return {"history": records}
+
+
+@router.get("/history/{run_id}")
+async def get_history_detail(run_id: str):
+    """获取某次管线执行的完整记录（含所有 clips）"""
+    hist_file = HISTORY_DIR / f"{run_id}.json"
+    if not hist_file.exists():
+        return {"error": "记录不存在"}
+
+    with open(hist_file) as f:
+        return json.load(f)

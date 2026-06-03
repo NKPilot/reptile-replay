@@ -257,6 +257,7 @@ body {
 .cls-usable { background: #052e16; color: #4ade80; }
 .cls-unknown { background: #422006; color: #f59e0b; }
 .cls-bad { background: #450a0a; color: #ef4444; }
+.cls-human { background: #4a044a; color: #f472b6; }
 
 .clip-source {
   font-size: 0.76rem; color: var(--text-dim);
@@ -295,6 +296,8 @@ body {
   padding: 4px 10px; border-bottom: 1px solid var(--border);
 }
 .preview-stats td:first-child { color: var(--text-dim); width: 100px; }
+.preview-divider td { padding: 4px 0 0; }
+.preview-divider hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
 /* ========== Group View ========== */
 .view-toggle { margin-left: auto; display: flex; gap: 6px; }
@@ -346,6 +349,68 @@ body {
 .type-badge.moving { background: #1e3a5f; color: #93c5fd; }
 .type-badge.resting { background: #334155; color: #94a3b8; }
 .type-badge.unknown { background: #3f3f46; color: #a1a1aa; }
+
+/* ========== Clip History ========== */
+.history-list { display: flex; flex-direction: column; gap: 12px; }
+
+.history-card {
+  background: var(--bg-card); border-radius: var(--radius);
+  overflow: hidden; border: 1px solid var(--border);
+  transition: border-color .15s;
+}
+.history-card:hover { border-color: #444; }
+
+.history-header {
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+  cursor: pointer; user-select: none; transition: background .15s;
+}
+.history-header:hover { background: var(--bg-hover); }
+.history-arrow { font-size: 0.9rem; color: var(--text-dim); width: 16px; flex-shrink: 0; }
+.history-icon { font-size: 1.2rem; flex-shrink: 0; }
+
+.history-meta {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+}
+.history-date { font-weight: 600; font-size: 0.9rem; }
+.history-videos { font-size: 0.78rem; color: var(--text-dim); }
+.history-duration { font-size: 0.72rem; color: var(--text-dim); }
+
+.history-stats {
+  display: flex; gap: 6px; flex-shrink: 0;
+}
+.history-stats span {
+  font-size: 0.72rem; padding: 2px 8px; border-radius: 3px; font-weight: 500;
+}
+.stat-bad { background: #450a0a; color: #ef4444; }
+
+.history-bars {
+  display: flex; gap: 3px; align-items: flex-end; height: 40px;
+  padding-left: 8px; flex-shrink: 0;
+}
+.history-bar-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 16px; height: 100%; justify-content: flex-end;
+}
+.history-bar-fill {
+  width: 100%; border-radius: 2px 2px 0 0; min-height: 3px;
+  transition: height .3s;
+}
+.history-bar-label { font-size: 0.55rem; line-height: 1; }
+
+.history-clips {
+  padding: 0 16px 16px;
+}
+.history-sources {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 10px 0; border-top: 1px solid var(--border);
+}
+.source-label { font-size: 0.78rem; color: var(--text-dim); }
+.source-tag {
+  font-size: 0.72rem; padding: 2px 8px; border-radius: 4px;
+  background: var(--bg); color: var(--text-dim);
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.history-empty { color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 20px; }
 
 /* ========== Material Library (首页素材库) ========== */
 .material-library {

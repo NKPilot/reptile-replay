@@ -16,40 +16,67 @@ label_cn:
   contact_mating_like: "接触/疑似交配"
   unknown: "未知/不可用"
 
-# 自动标注规则（基于运动分析）
+# 自动标注规则（基于运动分析 v2: 光流方向 + 纹理 + 自适应阈值）
 auto_label_rules:
   resting:
     desc: "几乎没有明显运动"
-    max_motion: 0.05       # 运动强度阈值（归一化后）
-    
+    max_motion: 0.05              # 运动强度阈值（归一化后）
+    max_direction_consistency: 0.5  # 静止时方向应杂乱
+
   moving:
     desc: "持续的中等强度运动"
     min_motion: 0.05
     max_motion: 0.35
-    min_duration_ratio: 0.6  # 窗口内运动帧占比
+    min_duration_ratio: 0.6       # 窗口内运动帧占比
+    min_direction_consistency: 0.25  # 移动时方向不应太随机
     
   feeding_or_strike_candidate:
-    desc: "短时间运动面积/强度突然增大"
+    desc: "短时间运动面积/强度突然增大 + 方向高度一致（单向爆发）"
     min_peak_motion: 0.35
-    peak_ratio: 2.0          # 峰值/均值比
-    max_peak_duration: 0.3   # 峰值持续时间占比
+    peak_ratio: 2.0               # 峰值/均值比
+    max_peak_duration: 0.3        # 峰值持续时间占比
+    min_direction_consistency: 0.55  # 攻击/进食方向高度一致
     
   contact_mating_like_candidate:
-    desc: "多个运动区域靠近或重叠"
+    desc: "多个运动区域靠近或重叠 + 方向杂乱（多向交错）"
     min_motion_regions: 2
     region_overlap_threshold: 0.3
-    
+    max_direction_consistency: 0.45  # 交配/接触方向杂乱
+
   shedding_candidate:
-    desc: "低速长时间运动+局部纹理变化"
+    desc: "低速长时间运动 + 纹理变化明显（蜕皮核心特征）"
     min_motion: 0.02
     max_motion: 0.15
     min_sustained_ratio: 0.8
-    note: "纯运动检测难以识别蜕皮，误报率高"
+    max_direction_consistency: 0.3   # 蜕皮方向杂乱无章
+    min_texture_change_rate: 0.04    # 蜕皮时纹理有明显变化
 
-# 自动筛选规则（usable/bad）
+  # 光流计算参数
+  flow_params:
+    downsample_ratio: 0.5            # 光流计算前缩放比例（加速）
+    min_flow_magnitude: 0.5          # 有效光流向量最小幅度（像素）
+
+  # 自适应阈值参数
+  adaptive:
+    enable: true                     # 是否启用自适应阈值
+    resting_percentile: 20           # 取运动曲线最低 N% 的帧作为基线
+    baseline_multiplier: 3.0         # 阈值 = baseline + multiplier * baseline_std
+    min_baseline_samples: 5          # 最少需要多少帧来估计基线
+
+# 自动筛选规则（usable/bad）—— 5 项检测
 screen_rules:
   blur_threshold: 50.0        # Laplacian方差阈值，低于此值视为模糊
   min_motion_frames: 3        # 5秒clip中最少需要多少帧有运动（8fps*5s=40帧）
   max_text_area_ratio: 0.3    # 文字区域最大占比
   max_scene_cuts: 3           # 5秒内最大切镜次数
   min_usable_score: 2         # 综合得分阈值（满足usable条件的数量）
+
+  # 人物检测（第 5 项检查）
+  human_detection:
+    enable: true                     # 是否启用人脸/人体检测
+    sample_frames: 16                # 均匀抽样帧数（不含锚点）
+    hog_hit_threshold: 0.0           # HOG 阈值（0=最严格，越高越宽松）
+    hog_scale: 1.05                  # HOG 检测窗口缩放步长
+    face_min_size: [30, 30]          # Haar 人脸最小检测尺寸（像素）
+    face_min_neighbors: 3            # Haar 邻近矩形数（越低越敏感）
+    force_bad_on_human: true         # 检测到人直接标记为 bad（否则只扣 1 分）

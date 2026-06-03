@@ -1,6 +1,6 @@
 """
 视频处理服务 —— 统一的处理编排层。
-    抽帧 → 运动分析 → 事件生成 → 剪辑
+    抽帧 → 运动分析 → 事件生成 → 人物检测 → 剪辑
 """
 
 import json
@@ -13,6 +13,7 @@ from typing import Optional
 
 from .event_aggregator import generate_events
 from .clipper import clip_all_events
+from .human_detector import detect_human_in_clip
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 UPLOADS_DIR = PROJECT_ROOT / "data" / "uploads"
@@ -165,25 +166,52 @@ def process_video(video_id: str) -> dict:
         if events:
             events = clip_all_events(video_path, EVENTS_DIR, events)
 
-        # 3. 保存事件到内存
+        # 3. 人物检测：逐 clip 检测并标记（不丢弃，让用户自行判断）
+        #    纪录片中人物与动物常同框出现，直接删除会丢失有效内容
+        human_count = 0
+        if events:
+            print(f"  🔍 人物检测: {len(events)} 个事件片段...", flush=True)
+            for i, evt in enumerate(events):
+                clip_path = evt.get("clip_path", "")
+                if not clip_path or not Path(clip_path).exists():
+                    evt["has_human"] = False
+                    continue
+
+                has_human, method, conf = detect_human_in_clip(clip_path)
+                evt["has_human"] = has_human
+                if has_human:
+                    human_count += 1
+                    print(f"    [{i+1}/{len(events)}] 👤 标记含人物: {Path(clip_path).name} ({method}, conf={conf:.2f})", flush=True)
+
+            if human_count > 0:
+                print(f"  ✓ 已标记 {human_count} 个含人物镜头的片段（已保留，前端可查看）", flush=True)
+
+        # 4. 保存事件到内存
         for evt in events:
             _event_store[evt["event_id"]] = evt
 
-        # 4. 保存结果 JSON
+        # 5. 保存结果 JSON
         result_path = RESULTS_DIR / f"{video_id}.json"
         with open(result_path, "w") as f:
             json.dump({
                 "video_id": video_id,
                 "events": events,
+                "human_filtered": human_count,
                 "motion_summary": result.get("motion_summary", {}),
                 "processed_at": datetime.now().isoformat(),
             }, f, ensure_ascii=False, indent=2)
 
         video["status"] = "done"
         video["event_count"] = len(events)
+        video["human_filtered"] = human_count
         video["result_path"] = str(result_path)
 
-        return {"video_id": video_id, "event_count": len(events), "events": events}
+        return {
+            "video_id": video_id,
+            "event_count": len(events),
+            "human_filtered": human_count,
+            "events": events,
+        }
 
     except Exception as e:
         video["status"] = "failed"

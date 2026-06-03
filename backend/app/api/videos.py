@@ -74,7 +74,9 @@ async def process_video_endpoint(video_id: str, background_tasks: BackgroundTask
         "video_id": video_id,
         "status": "done",
         "event_count": result.get("event_count", 0),
-        "message": f"处理完成，发现 {result.get('event_count', 0)} 个疑似关键行为",
+        "human_filtered": result.get("human_filtered", 0),
+        "message": f"处理完成，发现 {result.get('event_count', 0)} 个疑似关键行为"
+                   + (f"，过滤 {result.get('human_filtered', 0)} 个含人物镜头的片段" if result.get("human_filtered") else ""),
     }
 
 
@@ -102,5 +104,7 @@ async def import_source(source_video_id: str):
         "source_video_id": source_video_id,
         "status": "done",
         "event_count": result.get("event_count", 0),
-        "message": f"素材导入完成，发现 {result.get('event_count', 0)} 个疑似关键行为",
+        "human_filtered": result.get("human_filtered", 0),
+        "message": f"素材导入完成，发现 {result.get('event_count', 0)} 个疑似关键行为"
+                   + (f"，过滤 {result.get('human_filtered', 0)} 个含人物镜头的片段" if result.get("human_filtered") else ""),
     }

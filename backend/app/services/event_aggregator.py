@@ -1,5 +1,10 @@
 """
-事件聚合器 —— 从运动曲线生成行为事件。
+事件聚合器 v2 —— 从运动曲线生成行为事件。
+
+改进:
+    - 增强置信度公式（与 auto_label.py v2 对齐）
+    - 自适应阈值（基于全视频运动基线）
+    - 限制: 不包含光流/纹理分析（实时处理阶段无逐帧光流数据）
 
 流程:
     滑动窗口 → 窗口级分类 → 连续同类窗口合并 → 添加前后缓冲 → 生成事件
@@ -10,7 +15,7 @@ from .motion_detector import analyze_video_motion
 from pathlib import Path
 
 
-# 行为分类规则
+# 行为分类规则 (v2 对齐)
 CLASSIFY_RULES = {
     "resting": {
         "max_avg_intensity": 0.02,
@@ -38,9 +43,14 @@ CLASSIFY_RULES = {
 }
 
 
-def classify_window(window: list[dict]) -> tuple:
+def classify_window(window: list[dict], baseline_motion: float = 0.002) -> tuple:
     """
-    对滑动窗口内的运动数据分类。
+    对滑动窗口内的运动数据分类（v2 增强置信度）。
+
+    参数:
+        window: 窗口内帧数据列表
+        baseline_motion: 全局运动基线（用于自适应归一化）
+
     返回: (label_en, confidence)
     """
     if not window:
@@ -59,28 +69,38 @@ def classify_window(window: list[dict]) -> tuple:
     overlap_ratio = sum(1 for r in regions if r >= 2) / max(len(regions), 1)
     peak_to_avg = peak_intensity / max(avg_intensity, 0.001)
 
-    # 1. feeding_or_strike: 短时间剧烈运动
+    # 自适应归一化
+    norm_avg = avg_intensity / max(baseline_motion, 0.001)
+    norm_peak = peak_intensity / max(baseline_motion, 0.001)
+
+    # 1. feeding_or_strike: 短时间剧烈运动（v2: 增强置信度公式）
     if (peak_intensity >= CLASSIFY_RULES["feeding_or_strike"]["min_peak_intensity"] and
             peak_to_avg >= CLASSIFY_RULES["feeding_or_strike"]["peak_to_avg_ratio"]):
-        conf = min(0.5 + (peak_intensity - 0.15) / 0.3, 0.9)
-        return "feeding_or_strike", round(conf, 2)
+        # v2: 结合峰值与峰均比计算置信度
+        peak_score = min((peak_intensity - 0.15) / 0.3, 1.0)
+        ratio_score = min((peak_to_avg - 2.5) / 5.0, 1.0)
+        conf = 0.5 + peak_score * 0.25 + ratio_score * 0.15
+        return "feeding_or_strike", round(min(conf, 0.92), 2)
 
-    # 2. contact_mating_like: 多运动区域
+    # 2. contact_mating_like: 多运动区域（v2: 增强置信度）
     if (avg_regions >= CLASSIFY_RULES["contact_mating_like"]["min_avg_regions"] and
             overlap_ratio >= CLASSIFY_RULES["contact_mating_like"]["min_overlap_ratio"]):
-        conf = min(0.5 + overlap_ratio, 0.85)
-        return "contact_mating_like", round(conf, 2)
+        region_score = min(avg_regions / 5.0, 1.0)
+        conf = 0.4 + overlap_ratio * 0.3 + region_score * 0.15
+        return "contact_mating_like", round(min(conf, 0.85), 2)
 
-    # 3. shedding: 低速长时间运动
+    # 3. shedding: 低速长时间运动（v2: 置信度上限提升到 0.60）
     r = CLASSIFY_RULES["shedding"]
     if r["min_avg_intensity"] <= avg_intensity <= r["max_avg_intensity"] and motion_ratio >= r["min_motion_ratio"]:
-        conf = min(motion_ratio * 0.5, 0.5)
+        # 低速程度评分：越接近下限越好
+        speed_score = 1.0 - (avg_intensity - r["min_avg_intensity"]) / (r["max_avg_intensity"] - r["min_avg_intensity"])
+        conf = min(motion_ratio * 0.4 + speed_score * 0.2, 0.60)  # v2: 上限 0.60
         return "shedding", round(conf, 2)
 
-    # 4. moving
+    # 4. moving: 持续中等强度运动
     r = CLASSIFY_RULES["moving"]
     if r["min_avg_intensity"] <= avg_intensity <= r["max_avg_intensity"] and motion_ratio >= r["min_motion_ratio"]:
-        conf = min(motion_ratio, 0.85)
+        conf = min(motion_ratio * 0.7 + 0.1, 0.85)
         return "moving", round(conf, 2)
 
     # 5. resting
@@ -124,6 +144,13 @@ def generate_events(
     duration = motion["video_duration"]
     fps_effective = len(curve) / max(duration, 1)
 
+    # v2: 计算全视频运动基线
+    all_intensities = [f.get("intensity", 0) for f in curve if f.get("intensity", 0) > 0.001]
+    if len(all_intensities) >= 5:
+        baseline_motion = max(sorted(all_intensities)[len(all_intensities) // 10], 0.002)
+    else:
+        baseline_motion = 0.002
+
     # 窗口内帧数
     window_frames = max(1, int(window_size * fps_effective))
     step_frames = max(1, int(step_size * fps_effective))
@@ -132,7 +159,7 @@ def generate_events(
     window_labels = []
     for start in range(0, len(curve) - window_frames + 1, step_frames):
         window_data = curve[start:start + window_frames]
-        label, conf = classify_window(window_data)
+        label, conf = classify_window(window_data, baseline_motion)
         window_labels.append({
             "start_time": curve[start]["time"],
             "end_time": curve[min(start + window_frames - 1, len(curve) - 1)]["time"],

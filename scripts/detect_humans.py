@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-人脸检测补充扫描 —— 对已筛选的 clips 做 OpenCV Haar 人脸检测，
-将含人脸的 clip 重新标记为 bad，更新 screen_result.csv。
+⚠ 已废弃: 人物检测已集成到 screen_clips.py（第 5 项检查，使用 HOG+Haar 双保险）。
+
+该脚本仅作为独立工具保留，如需对已有 screen_result.csv 做补充扫描可手动运行。
 
 用法:
     uv run python scripts/detect_humans.py
