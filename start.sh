@@ -27,7 +27,7 @@ echo "  ✓ Python 依赖就绪"
 echo "[2/4] 检查 ffmpeg..."
 if ! command -v ffmpeg &>/dev/null; then
     echo "  安装 ffmpeg 静态版本..."
-    curl -sSL -o /tmp/ffmpeg.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+    curl -#L -o /tmp/ffmpeg.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
     tar xf /tmp/ffmpeg.tar.xz -C /tmp/
     cp /tmp/ffmpeg-*-static/ffmpeg /tmp/ffmpeg-*-static/ffprobe ~/.local/bin/
 fi
@@ -36,7 +36,7 @@ echo "  ✓ ffmpeg 就绪"
 # 3. 前端安装
 echo "[3/4] 安装前端依赖..."
 cd "$PROJECT_DIR/frontend"
-npm install --silent 2>&1 | tail -1
+npm install
 echo "  ✓ 前端依赖就绪"
 
 # 4. 启动

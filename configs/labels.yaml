@@ -75,8 +75,10 @@ screen_rules:
   human_detection:
     enable: true                     # 是否启用人脸/人体检测
     sample_frames: 16                # 均匀抽样帧数（不含锚点）
-    hog_hit_threshold: 0.0           # HOG 阈值（0=最严格，越高越宽松）
+    hog_enabled: false               # HOG 人体检测（爬宠场景误报率高，默认关闭）
+    hog_hit_threshold: 0.3           # HOG 阈值（越高越宽松，减少误报）
+    face_enabled: true               # Haar 人脸检测（对爬宠场景准确率高）
     hog_scale: 1.05                  # HOG 检测窗口缩放步长
-    face_min_size: [30, 30]          # Haar 人脸最小检测尺寸（像素）
-    face_min_neighbors: 3            # Haar 邻近矩形数（越低越敏感）
+    face_min_size: [60, 60]          # Haar 人脸最小检测尺寸（像素）
+    face_min_neighbors: 5            # Haar 邻近矩形数（越高越严格，减少误报）
     force_bad_on_human: true         # 检测到人直接标记为 bad（否则只扣 1 分）

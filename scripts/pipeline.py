@@ -246,6 +246,13 @@ def main():
     parser.add_argument("--width", type=int, default=640, help="切片宽度")
     parser.add_argument("--fps", type=int, default=8, help="切片帧率")
     parser.add_argument("--segment-time", type=int, default=5, help="切片时长(秒)")
+    # 下载认证相关（透传给 download_videos.py）
+    parser.add_argument("--cookies-from-browser", type=str, default="", help="从浏览器读取 cookies（传递给下载脚本）")
+    parser.add_argument("--cookies", type=str, default="", help="cookies.txt 文件路径（传递给下载脚本）")
+    parser.add_argument("--browser-profile", type=str, default="", help="浏览器配置目录路径（传递给下载脚本，WSL 专用）")
+    parser.add_argument("--oauth", action="store_true", help="使用 OAuth 认证（传递给下载脚本）")
+    parser.add_argument("--client", type=str, default="web", choices=["web", "android", "ios"], help="YouTube 客户端类型（传递给下载脚本）")
+    parser.add_argument("--proxy", type=str, default="", help="代理地址（传递给下载脚本）")
     args = parser.parse_args()
 
     started_at = datetime.now()
@@ -263,6 +270,18 @@ def main():
             print(f"  共 {len(urls)} 个 URL")
         else:
             cmd = [*_PYTHON_RUN, str(SCRIPTS_DIR / "download_videos.py"), "--urls", args.urls]
+            if args.cookies_from_browser:
+                cmd.extend(["--cookies-from-browser", args.cookies_from_browser])
+            if args.cookies:
+                cmd.extend(["--cookies", args.cookies])
+            if args.browser_profile:
+                cmd.extend(["--browser-profile", args.browser_profile])
+            if args.oauth:
+                cmd.append("--oauth")
+            if args.client:
+                cmd.extend(["--client", args.client])
+            if args.proxy:
+                cmd.extend(["--proxy", args.proxy])
             if not run_step("下载视频", cmd):
                 print("下载步骤失败，终止管线")
                 sys.exit(1)

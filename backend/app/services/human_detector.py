@@ -13,10 +13,12 @@ import numpy as np
 
 # 默认规则（可被调用方覆盖）
 DEFAULT_RULES = {
-    "hog_hit_threshold": 0.0,       # 降低阈值，提高召回率
+    "hog_enabled": False,             # HOG 在爬宠场景误报率太高，默认关闭
+    "hog_hit_threshold": 0.3,
     "hog_scale": 1.05,
-    "face_min_size": [30, 30],      # 降低最小尺寸
-    "face_min_neighbors": 3,         # 降低邻居数，提高召回率
+    "face_enabled": True,             # 仅用 Haar 人脸检测
+    "face_min_size": [60, 60],
+    "face_min_neighbors": 5,
 }
 
 # 全局缓存
@@ -62,45 +64,61 @@ def detect_human(frame: np.ndarray, human_rules: dict | None = None) -> Tuple[bo
     method = "none"
     max_conf = 0.0
 
-    # 1. HOG 人体检测
-    try:
-        h, w = frame.shape[:2]
-        if max(w, h) > 640:
-            scale = 640.0 / max(w, h)
-            small = cv2.resize(frame, (int(w * scale), int(h * scale)))
-        else:
-            small = frame
+    # 1. HOG 人体检测（默认关闭：爬宠场景下 HOG 误报率太高）
+    if rules.get("hog_enabled", False):
+        try:
+            h, w = frame.shape[:2]
+            if max(w, h) > 640:
+                scale = 640.0 / max(w, h)
+                small = cv2.resize(frame, (int(w * scale), int(h * scale)))
+                small_h, small_w = small.shape[:2]
+                small_area = small_h * small_w
+            else:
+                small = frame
+                small_h, small_w = h, w
+                small_area = h * w
 
-        rects, weights = hog.detectMultiScale(
-            small,
-            winStride=(8, 8),
-            padding=(16, 16),
-            scale=rules["hog_scale"],
-            hitThreshold=rules["hog_hit_threshold"],
-        )
+            rects, weights = hog.detectMultiScale(
+                small,
+                winStride=(8, 8),
+                padding=(16, 16),
+                scale=rules["hog_scale"],
+                hitThreshold=rules["hog_hit_threshold"],
+            )
 
-        if len(rects) > 0:
-            max_conf = float(max(weights)) if len(weights) > 0 else 0.5
-            has_human = True
-            method = "hog"
-    except Exception:
-        pass
+            # 几何校验：过滤明显不是人体的检测框
+            valid_rects = []
+            valid_weights = []
+            for i, (rx, ry, rw, rh) in enumerate(rects):
+                aspect_ratio = rh / max(rw, 1)
+                area_ratio = (rw * rh) / small_area
+                if 1.2 <= aspect_ratio <= 4.0 and 0.03 <= area_ratio <= 0.65:
+                    valid_rects.append((rx, ry, rw, rh))
+                    valid_weights.append(weights[i] if i < len(weights) else 0.5)
+
+            if len(valid_rects) > 0:
+                max_conf = float(max(valid_weights))
+                has_human = True
+                method = "hog"
+        except Exception:
+            pass
 
     # 2. Haar 人脸检测
-    try:
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=rules["face_min_neighbors"],
-            minSize=tuple(rules["face_min_size"]),
-        )
-        if len(faces) > 0:
-            has_human = True
-            method = f"{method}+haar_face" if has_human else "haar_face"
-            max_conf = max(max_conf, 0.8)
-    except Exception:
-        pass
+    if rules.get("face_enabled", True):
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=rules["face_min_neighbors"],
+                minSize=tuple(rules["face_min_size"]),
+            )
+            if len(faces) > 0:
+                has_human = True
+                method = f"{method}+haar_face" if has_human else "haar_face"
+                max_conf = max(max_conf, 0.85)
+        except Exception:
+            pass
 
     return has_human, method, max_conf
 
