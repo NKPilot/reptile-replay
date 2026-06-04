@@ -1,68 +1,93 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
-  getLocatorRun,
-  listLocatorRuns,
+  getModelRun,
+  listModelRuns,
   type LocatorClip,
   type LocatorFrame,
-  type LocatorRunDetail,
-  type LocatorRunSummary,
+  type ModelRunDetail,
+  type ModelRunSummary,
 } from '../services/api'
 
 export default function LocatorPage() {
-  const [runs, setRuns] = useState<LocatorRunSummary[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const videoId = searchParams.get('video') || ''
+  const requestedRun = searchParams.get('run') || ''
+  const [runs, setRuns] = useState<ModelRunSummary[]>([])
   const [selectedRun, setSelectedRun] = useState('')
-  const [detail, setDetail] = useState<LocatorRunDetail | null>(null)
+  const [detail, setDetail] = useState<ModelRunDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
-  const [onlyDetected, setOnlyDetected] = useState(false)
   const [preview, setPreview] = useState<LocatorClip | null>(null)
 
   useEffect(() => {
     loadRuns()
-  }, [])
+  }, [videoId])
 
   useEffect(() => {
     if (selectedRun) loadRun(selectedRun)
   }, [selectedRun])
 
-  async function loadRuns() {
-    setLoading(true)
+  useEffect(() => {
+    if (!detail || !['queued', 'running'].includes(detail.status)) return
+    const timer = window.setInterval(() => {
+      loadRun(detail.run_id, true)
+      loadRuns(true)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [detail?.run_id, detail?.status])
+
+  async function loadRuns(silent = false) {
+    if (!silent) setLoading(true)
     setError('')
     try {
-      const data = await listLocatorRuns()
+      const data = await listModelRuns(videoId || undefined)
       setRuns(data.runs)
-      if (data.runs.length > 0) setSelectedRun(data.runs[0].run_id)
+      const ids = new Set(data.runs.map(run => run.run_id))
+      const nextRun = (
+        requestedRun && ids.has(requestedRun) ? requestedRun :
+        selectedRun && ids.has(selectedRun) ? selectedRun :
+        data.runs[0]?.run_id || ''
+      )
+      if (nextRun !== selectedRun) setSelectedRun(nextRun)
+      if (!nextRun) setDetail(null)
     } catch {
-      setError('加载模型检测记录失败，请检查后端是否运行')
+      setError('加载模型剪辑记录失败，请检查后端是否运行')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
-  async function loadRun(runId: string) {
-    setDetailLoading(true)
+  async function loadRun(runId: string, silent = false) {
+    if (!silent) setDetailLoading(true)
     setError('')
     try {
-      setDetail(await getLocatorRun(runId))
+      const run = await getModelRun(runId)
+      setDetail(run)
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev)
+        next.set('run', runId)
+        if (run.video_id) next.set('video', run.video_id)
+        return next
+      }, { replace: true })
     } catch {
       setDetail(null)
-      setError('加载模型检测结果失败')
+      setError('加载模型剪辑结果失败')
     } finally {
-      setDetailLoading(false)
+      if (!silent) setDetailLoading(false)
     }
   }
 
   const clips = useMemo(() => {
     const items = detail?.clips || []
-    const filtered = onlyDetected ? items.filter(c => c.has_reptile) : items
-    return [...filtered].sort((a, b) => {
+    return [...items].sort((a, b) => {
       const aConf = a.confidence ?? a.behavior_candidates?.[0]?.confidence ?? 0
       const bConf = b.confidence ?? b.behavior_candidates?.[0]?.confidence ?? 0
       if (bConf !== aConf) return bConf - aConf
       return b.detected_frames - a.detected_frames
     })
-  }, [detail, onlyDetected])
+  }, [detail])
 
   function formatDateTime(iso: string) {
     if (!iso) return '未知时间'
@@ -95,6 +120,22 @@ export default function LocatorPage() {
   function confidenceText(value?: number) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
     return `${Math.round(value * 100)}%`
+  }
+
+  function statusText(status?: string) {
+    const map: Record<string, string> = {
+      queued: '排队中',
+      running: '模型运行中',
+      done: '已完成',
+      failed: '失败',
+    }
+    return map[status || ''] || status || '-'
+  }
+
+  function distributionText(distribution?: Record<string, number>) {
+    const entries = Object.entries(distribution || {})
+    if (entries.length === 0) return '-'
+    return entries.map(([label, count]) => `${label} ${count}`).join(' · ')
   }
 
   function topCandidates(clip: LocatorClip) {
@@ -178,30 +219,31 @@ export default function LocatorPage() {
   return (
     <div className="locator-page">
       <div className="clips-header">
-        <h1>模型检测</h1>
-        <p className="clips-subtitle">LocateAnything / GroundingDINO 离线剪辑定位结果</p>
+        <h1>模型剪辑</h1>
+        <p className="clips-subtitle">单视频 LocateAnything 行为候选剪辑结果</p>
 
         <div className="filter-bar locator-toolbar">
           <select
             value={selectedRun}
-            onChange={(e) => setSelectedRun(e.target.value)}
+            onChange={(e) => {
+              setSelectedRun(e.target.value)
+              setSearchParams(prev => {
+                const next = new URLSearchParams(prev)
+                next.set('run', e.target.value)
+                return next
+              })
+            }}
             disabled={runs.length === 0}
           >
             {runs.length === 0 ? (
-              <option value="">暂无检测记录</option>
+              <option value="">暂无模型剪辑记录</option>
             ) : runs.map(run => (
               <option key={run.run_id} value={run.run_id}>
-                {run.filename} · {run.detected_clip_count}/{run.clip_count}
+                {formatDateTime(run.created_at)} · {statusText(run.status)} · {run.visible_clip_count}/{run.clip_count}
               </option>
             ))}
           </select>
-          <button
-            className={`btn btn-sm ${onlyDetected ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setOnlyDetected(v => !v)}
-          >
-            只看检出
-          </button>
-          <button className="btn btn-sm btn-outline" onClick={loadRuns}>刷新</button>
+          <button className="btn btn-sm btn-outline" onClick={() => loadRuns()}>刷新</button>
         </div>
       </div>
 
@@ -211,9 +253,9 @@ export default function LocatorPage() {
       {!loading && !error && runs.length === 0 && (
         <div className="empty-state">
           <div className="icon">⌕</div>
-          <p>暂无模型检测结果</p>
+          <p>暂无模型剪辑结果</p>
           <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>
-            目标文件：data/results/locateanything_test.json
+            请先在视频详情或素材库中点击开始模型剪辑
           </p>
         </div>
       )}
@@ -222,32 +264,36 @@ export default function LocatorPage() {
         <>
           <div className="locator-summary">
             <div>
-              <span>检出率</span>
-              <strong>{detail.detected_clip_count}/{detail.clip_count}</strong>
+              <span>状态</span>
+              <strong>{statusText(detail.status)}</strong>
             </div>
             <div>
-              <span>抽帧</span>
-              <strong>{detail.sample_frames}</strong>
+              <span>行为片段</span>
+              <strong>{detail.visible_clip_count}/{detail.clip_count}</strong>
             </div>
             <div>
               <span>耗时</span>
-              <strong>{formatSeconds(detail.elapsed_sec)}</strong>
+              <strong>{formatSeconds(detail.duration_seconds)}</strong>
             </div>
             <div>
-              <span>后端</span>
-              <strong>{detail.backend || '-'}</strong>
+              <span>行为分布</span>
+              <strong>{distributionText(detail.behavior_distribution)}</strong>
             </div>
           </div>
 
           <div className="locator-run-meta">
             <span>{formatDateTime(detail.created_at)}</span>
-            <span>{detail.device || 'unknown'} / {detail.dtype || 'auto'}</span>
-            <span title={detail.model_dir}>{detail.model_dir.split('/').pop() || detail.model_dir}</span>
-            <span>{detail.prompts.join(', ')}</span>
+            <span title={detail.run_id}>{detail.run_id}</span>
+            <span title={detail.source_title}>{detail.source_title || detail.video_id}</span>
+            {detail.error ? <span>{detail.error}</span> : null}
           </div>
 
-          {clips.length === 0 ? (
-            <div className="empty-state"><p>当前过滤条件下没有片段</p></div>
+          {detail.status === 'queued' || detail.status === 'running' ? (
+            <div className="loading"><span className="spinner" /> {statusText(detail.status)}，结果会自动刷新...</div>
+          ) : detail.status === 'failed' ? (
+            <div className="empty-state"><p>{detail.error || '模型剪辑失败'}</p></div>
+          ) : clips.length === 0 ? (
+            <div className="empty-state"><p>没有检出有爬宠且带具体行为候选的片段</p></div>
           ) : (
             <div className="locator-grid">
               {clips.map(renderClip)}

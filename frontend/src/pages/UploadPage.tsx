@@ -1,12 +1,21 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { uploadVideo, listVideos, listSources, importSource, type VideoInfo, type SourceItem } from '../services/api'
+import {
+  createModelRun,
+  uploadVideo,
+  listVideos,
+  listSources,
+  importSource,
+  type VideoInfo,
+  type SourceItem,
+} from '../services/api'
 
 export default function UploadPage() {
   const [videos, setVideos] = useState<VideoInfo[]>([])
   const [sources, setSources] = useState<SourceItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [importing, setImporting] = useState<string>('') // 正在导入的素材名
+  const [modelSource, setModelSource] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [dragSource, setDragSource] = useState<string>('') // 拖入的素材 video_id
   const [error, setError] = useState('')
@@ -68,6 +77,20 @@ export default function UploadPage() {
       setError(e.message || '素材导入失败')
     } finally {
       setImporting('')
+    }
+  }
+
+  async function handleSourceModelRun(sourceId: string) {
+    const src = sources.find(s => s.video_id === sourceId)
+    setError('')
+    setModelSource(sourceId)
+    try {
+      const run = await createModelRun({ source_video_id: sourceId })
+      navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
+    } catch (e: any) {
+      setError(e.message || `创建「${src?.title || sourceId}」模型剪辑任务失败`)
+    } finally {
+      setModelSource('')
     }
   }
 
@@ -201,6 +224,17 @@ export default function UploadPage() {
                     <span className="stat-usable">{s.usable_clips} 可用</span>
                     {s.unknown_clips > 0 && <span className="stat-unknown">{s.unknown_clips} 待定</span>}
                   </div>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    style={{ marginTop: 8, width: '100%' }}
+                    disabled={modelSource === s.video_id}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSourceModelRun(s.video_id)
+                    }}
+                  >
+                    {modelSource === s.video_id ? '创建中...' : '模型剪辑'}
+                  </button>
                 </div>
               </div>
             ))}

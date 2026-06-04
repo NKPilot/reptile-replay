@@ -611,14 +611,25 @@ def behavior_candidates(
 
     if near_food:
         scores["feeding_or_strike"] += 0.28
+        scores["shedding"] -= 0.18
     if near_shed:
-        scores["shedding"] += 0.26
+        shed_bonus = 0.26
+        if peak_motion >= 0.06:
+            shed_bonus -= 0.12
+        if near_food:
+            shed_bonus -= 0.10
+        scores["shedding"] += max(0.0, shed_bonus)
     if near_water:
         scores["drinking"] += 0.30
     if near_human:
         scores["interaction"] += 0.26
         scores["feeding_or_strike"] -= 0.10
         scores["contact_mating_like"] -= 0.08
+        scores["shedding"] -= 0.08
+    if near_food and peak_motion >= 0.06 and roi_motion >= 0.35:
+        scores["feeding_or_strike"] += 0.14
+    if peak_motion >= 0.075:
+        scores["shedding"] -= 0.08
     if near_reptile_pair:
         scores["contact_mating_like"] += 0.22
     if multi_reptile_ratio > 0 and peak_motion < 0.08:
@@ -631,6 +642,12 @@ def behavior_candidates(
         scores = {"unknown": 0.35}
     else:
         scores["unknown"] = max(0.05, 0.32 - continuity * 0.18)
+        if near_food and peak_motion >= 0.06:
+            scores["shedding"] = min(scores["shedding"], scores["feeding_or_strike"] - 0.05)
+        elif peak_motion >= 0.075:
+            scores["shedding"] = min(scores["shedding"], 0.68)
+        elif not near_shed:
+            scores["shedding"] = min(scores["shedding"], 0.62)
 
     ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:3]
     candidates = [

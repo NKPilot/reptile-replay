@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { getVideo, processVideo, listEvents, reviewEvent, exportAnnotations, type VideoInfo, type EventItem } from '../services/api'
+import { useNavigate, useParams, Link } from 'react-router-dom'
+import {
+  createModelRun,
+  getVideo,
+  listEvents,
+  listModelRuns,
+  processVideo,
+  reviewEvent,
+  exportAnnotations,
+  type EventItem,
+  type ModelRunSummary,
+  type VideoInfo,
+} from '../services/api'
 import EventCard from '../components/EventCard'
 
 export default function VideoDetailPage() {
@@ -8,8 +19,11 @@ export default function VideoDetailPage() {
   const [video, setVideo] = useState<VideoInfo | null>(null)
   const [events, setEvents] = useState<EventItem[]>([])
   const [processing, setProcessing] = useState(false)
+  const [modelRunning, setModelRunning] = useState(false)
+  const [modelRuns, setModelRuns] = useState<ModelRunSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!videoId) return
@@ -24,6 +38,8 @@ export default function VideoDetailPage() {
         const evts = await listEvents(videoId!)
         setEvents(evts.events)
       }
+      const runs = await listModelRuns(videoId!).catch(() => ({ runs: [] }))
+      setModelRuns(runs.runs)
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -46,6 +62,20 @@ export default function VideoDetailPage() {
       setError(e.message || '处理失败')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  async function handleModelRun() {
+    if (!videoId) return
+    setModelRunning(true)
+    setError('')
+    try {
+      const run = await createModelRun({ video_id: videoId })
+      navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
+    } catch (e: any) {
+      setError(e.message || '创建模型剪辑任务失败')
+    } finally {
+      setModelRunning(false)
     }
   }
 
@@ -96,7 +126,26 @@ export default function VideoDetailPage() {
         {video.status === 'done' && events.length > 0 && (
           <button className="btn btn-outline btn-sm" onClick={handleExport}>📥 导出标注</button>
         )}
+
+        <button className="btn btn-primary btn-sm" onClick={handleModelRun} disabled={modelRunning}>
+          {modelRunning ? <><span className="spinner" /> 创建中...</> : '开始模型剪辑'}
+        </button>
       </div>
+
+      {modelRuns.length > 0 && (
+        <div className="locator-run-meta" style={{ marginBottom: 18 }}>
+          <span>模型剪辑历史</span>
+          {modelRuns.slice(0, 4).map(run => (
+            <button
+              key={run.run_id}
+              className="btn btn-sm btn-outline"
+              onClick={() => navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)}
+            >
+              {run.status === 'done' ? `${run.visible_clip_count}/${run.clip_count}` : run.status}
+            </button>
+          ))}
+        </div>
+      )}
 
       {video.status === 'done' && (
         <div className="events-section">

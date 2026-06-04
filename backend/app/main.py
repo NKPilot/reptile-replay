@@ -19,7 +19,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # 确保 ffmpeg/yt-dlp 在 PATH 中
 os.environ["PATH"] = os.path.expanduser("~/.local/bin") + ":" + os.environ.get("PATH", "")
 
-from app.api import videos, events, clips, locator
+from app.api import videos, events, clips, locator, model_runs
+from app.services.model_run_processor import init_model_run_storage
 from app.services.video_processor import init_storage
 
 app = FastAPI(
@@ -42,6 +43,7 @@ app.include_router(videos.router)
 app.include_router(events.router)
 app.include_router(clips.router)
 app.include_router(locator.router)
+app.include_router(model_runs.router)
 
 # 静态文件服务（剪辑片段）
 events_dir = PROJECT_ROOT / "data" / "events"
@@ -67,6 +69,7 @@ app.mount("/static/results", StaticFiles(directory=str(results_dir)), name="stat
 @app.on_event("startup")
 async def startup():
     init_storage()
+    init_model_run_storage()
     print("🚀 ReptiReplay 后端已启动")
 
 

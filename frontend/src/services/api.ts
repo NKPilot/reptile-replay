@@ -312,3 +312,51 @@ export async function getLocatorRun(runId: string): Promise<LocatorRunDetail> {
   if (!res.ok) throw new Error((await res.json()).detail || '加载模型检测结果失败')
   return res.json()
 }
+
+// ========== Model Runs API ==========
+
+export interface ModelRunSummary {
+  run_id: string
+  video_id: string
+  source_video_id: string
+  source_title: string
+  status: 'queued' | 'running' | 'done' | 'failed'
+  created_at: string
+  started_at: string
+  finished_at: string
+  error: string
+  clip_count: number
+  visible_clip_count: number
+  behavior_distribution: Record<string, number>
+  duration_seconds: number
+}
+
+export interface ModelRunDetail extends ModelRunSummary {
+  clips: LocatorClip[]
+}
+
+export async function createModelRun(params: {
+  video_id?: string
+  source_video_id?: string
+}): Promise<{ run_id: string; video_id: string; source_video_id: string; status: string }> {
+  const res = await fetch(`${BASE}/model-runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) throw new Error((await res.json()).detail || '创建模型剪辑任务失败')
+  return res.json()
+}
+
+export async function listModelRuns(videoId?: string): Promise<{ runs: ModelRunSummary[] }> {
+  const qs = videoId ? `?video_id=${encodeURIComponent(videoId)}` : ''
+  const res = await fetch(`${BASE}/model-runs${qs}`)
+  if (!res.ok) throw new Error('加载模型剪辑历史失败')
+  return res.json()
+}
+
+export async function getModelRun(runId: string): Promise<ModelRunDetail> {
+  const res = await fetch(`${BASE}/model-runs/${encodeURIComponent(runId)}`)
+  if (!res.ok) throw new Error((await res.json()).detail || '加载模型剪辑结果失败')
+  return res.json()
+}
