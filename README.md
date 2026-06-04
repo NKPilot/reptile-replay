@@ -87,12 +87,12 @@ chmod +x start.sh
 
 ```bash
 # 1. 后端
-uv sync
+uv sync --locked
 uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 
 # 2. 前端（新终端）
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -106,6 +106,25 @@ cp .env.example .env
 ```
 
 后端启动时会自动读取项目根目录的 `.env`。未配置 `OLLAMA_API_KEY` 时，模型剪辑仍会正常运行，只使用 LocateAnything/规则标签。
+
+### 生产环境 lockfile 处理
+
+生产环境不要提交运行服务或下载模型产生的 lockfile 变化。启动脚本已使用锁定安装：
+
+- Python: `uv sync --locked`
+- 前端: `npm ci`
+
+下载 LocateAnything 模型时也使用锁定命令：
+
+```bash
+uv run --locked --group model-download python scripts/download_locateanything.py
+```
+
+如果生产仓库已经出现仅由安装命令产生的 `uv.lock` / `frontend/package-lock.json` 变更，可以在确认没有手动改依赖后恢复：
+
+```bash
+git restore uv.lock frontend/package-lock.json
+```
 
 ## 🔧 使用流程
 

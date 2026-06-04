@@ -20,7 +20,7 @@ if ! command -v uv &>/dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
 fi
-uv sync
+uv sync --locked
 echo "  ✓ Python 依赖就绪"
 
 # 2. 检查 ffmpeg
@@ -36,7 +36,7 @@ echo "  ✓ ffmpeg 就绪"
 # 3. 前端安装
 echo "[3/4] 安装前端依赖..."
 cd "$PROJECT_DIR/frontend"
-npm install
+npm ci
 echo "  ✓ 前端依赖就绪"
 
 # 4. 启动

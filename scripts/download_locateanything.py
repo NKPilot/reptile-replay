@@ -19,17 +19,17 @@ LocateAnything-3B 模型下载脚本 —— 从 ModelScope 下载 NVIDIA 视觉�
     → 区分不同爬宠个体（如多条蛇）
 
 依赖 (uv 可选依赖组，不进入项目主依赖):
-    uv sync --group model-download
+    uv sync --locked --group model-download
 
 用法:
     # 预览
-    python download_locateanything.py --dry-run
+    uv run --locked --group model-download python scripts/download_locateanything.py --dry-run
 
     # 下载模型
-    python download_locateanything.py
+    uv run --locked --group model-download python scripts/download_locateanything.py
 
     # 指定保存目录
-    python download_locateanything.py --models-dir /path/to/models
+    uv run --locked --group model-download python scripts/download_locateanything.py --models-dir /path/to/models
 """
 
 import argparse
@@ -50,8 +50,8 @@ def check_modelscope() -> bool:
     """检查 modelscope SDK 是否可用。"""
     if importlib.util.find_spec("modelscope") is None:
         print("❌ 需要 modelscope SDK")
-        print("   请运行: uv sync --group model-download")
-        print("   然后使用: uv run --group model-download python scripts/download_locateanything.py")
+        print("   请运行: uv sync --locked --group model-download")
+        print("   然后使用: uv run --locked --group model-download python scripts/download_locateanything.py")
         return False
     return True
 
