@@ -5,7 +5,6 @@ import {
   uploadVideo,
   listVideos,
   listSources,
-  importSource,
   type VideoInfo,
   type SourceItem,
 } from '../services/api'
@@ -16,6 +15,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [importing, setImporting] = useState<string>('') // 正在导入的素材名
   const [modelSource, setModelSource] = useState('')
+  const [modelVideo, setModelVideo] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [dragSource, setDragSource] = useState<string>('') // 拖入的素材 video_id
   const [error, setError] = useState('')
@@ -55,10 +55,10 @@ export default function UploadPage() {
     try {
       const result = await uploadVideo(file)
       await loadVideos()
-      // 跳转到详情页
-      navigate(`/video/${result.video_id}`)
+      const run = await createModelRun({ video_id: result.video_id })
+      navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
     } catch (e: any) {
-      setError(e.message || '上传失败')
+      setError(e.message || '上传或模型剪辑失败')
     } finally {
       setUploading(false)
     }
@@ -70,11 +70,11 @@ export default function UploadPage() {
     setImporting(src?.title || sourceId)
     setDragSource('')
     try {
-      const result = await importSource(sourceId)
+      const run = await createModelRun({ source_video_id: sourceId })
       await loadVideos()
-      navigate(`/video/${result.video_id}`)
+      navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
     } catch (e: any) {
-      setError(e.message || '素材导入失败')
+      setError(e.message || '素材模型剪辑失败')
     } finally {
       setImporting('')
     }
@@ -91,6 +91,19 @@ export default function UploadPage() {
       setError(e.message || `创建「${src?.title || sourceId}」模型剪辑任务失败`)
     } finally {
       setModelSource('')
+    }
+  }
+
+  async function handleUploadedModelRun(videoId: string) {
+    setError('')
+    setModelVideo(videoId)
+    try {
+      const run = await createModelRun({ video_id: videoId })
+      navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
+    } catch (e: any) {
+      setError(e.message || '创建模型剪辑任务失败')
+    } finally {
+      setModelVideo('')
     }
   }
 
@@ -135,17 +148,17 @@ export default function UploadPage() {
           <>
             <div className="spinner" />
             <p style={{ marginTop: 12 }}>正在识别「{importing.slice(0, 30)}」…</p>
-            <p className="hint">运动分析 + 事件生成 + 自动剪辑，请稍候</p>
+            <p className="hint">模型直接识别并剪辑关键行为，请稍候</p>
           </>
         ) : uploading ? (
           <>
             <div className="spinner" />
-            <p style={{ marginTop: 12 }}>上传中...</p>
+            <p style={{ marginTop: 12 }}>上传并创建模型剪辑任务...</p>
           </>
         ) : dragSource ? (
           <>
             <div className="icon" style={{ fontSize: '2.5rem' }}>📥</div>
-            <p>释放以导入并分析此素材</p>
+            <p>释放以开始模型剪辑</p>
             <p className="hint" style={{ color: 'var(--accent)' }}>
               {sources.find(s => s.video_id === dragSource)?.title?.slice(0, 40) || dragSource}
             </p>
@@ -154,7 +167,7 @@ export default function UploadPage() {
           <>
             <div className="icon">📤</div>
             <p>点击或拖拽视频到此处上传</p>
-            <p className="hint">也可从下方素材库拖入预下载视频</p>
+            <p className="hint">选择后会直接开始模型剪辑</p>
           </>
         )}
       </div>
@@ -171,7 +184,7 @@ export default function UploadPage() {
           <h3>已上传的视频 ({videos.length})</h3>
           {videos.map((v) => (
             <div key={v.video_id} className="video-card"
-                 onClick={() => navigate(`/video/${v.video_id}`)}
+                 onClick={() => handleUploadedModelRun(v.video_id)}
                  style={{ cursor: 'pointer' }}>
               <span className="name">{v.original_name}</span>
               <span className="size">{formatSize(v.file_size)}</span>
@@ -181,7 +194,9 @@ export default function UploadPage() {
                  v.status === 'done' ? '已完成' :
                  v.status === 'failed' ? '失败' : v.status}
               </span>
-              <span style={{ color: 'var(--text-dim)' }}>→</span>
+              <span style={{ color: 'var(--text-dim)' }}>
+                {modelVideo === v.video_id ? '创建中...' : '模型剪辑 →'}
+              </span>
             </div>
           ))}
         </div>
@@ -205,7 +220,7 @@ export default function UploadPage() {
                   e.dataTransfer.effectAllowed = 'move'
                 }}
                 onDragEnd={() => setDragSource('')}
-                onClick={() => navigate(`/clips?source=${s.video_id}`)}
+                onClick={() => handleSourceModelRun(s.video_id)}
               >
                 <div className="material-thumb">
                   {s.thumbnail ? (
@@ -224,17 +239,9 @@ export default function UploadPage() {
                     <span className="stat-usable">{s.usable_clips} 可用</span>
                     {s.unknown_clips > 0 && <span className="stat-unknown">{s.unknown_clips} 待定</span>}
                   </div>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    style={{ marginTop: 8, width: '100%' }}
-                    disabled={modelSource === s.video_id}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleSourceModelRun(s.video_id)
-                    }}
-                  >
-                    {modelSource === s.video_id ? '创建中...' : '模型剪辑'}
-                  </button>
+                  <div className="material-action">
+                    {modelSource === s.video_id ? '创建中...' : '点击开始模型剪辑'}
+                  </div>
                 </div>
               </div>
             ))}

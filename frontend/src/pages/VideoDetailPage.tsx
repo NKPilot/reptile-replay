@@ -3,22 +3,14 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import {
   createModelRun,
   getVideo,
-  listEvents,
   listModelRuns,
-  processVideo,
-  reviewEvent,
-  exportAnnotations,
-  type EventItem,
   type ModelRunSummary,
   type VideoInfo,
 } from '../services/api'
-import EventCard from '../components/EventCard'
 
 export default function VideoDetailPage() {
   const { videoId } = useParams<{ videoId: string }>()
   const [video, setVideo] = useState<VideoInfo | null>(null)
-  const [events, setEvents] = useState<EventItem[]>([])
-  const [processing, setProcessing] = useState(false)
   const [modelRunning, setModelRunning] = useState(false)
   const [modelRuns, setModelRuns] = useState<ModelRunSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,34 +26,12 @@ export default function VideoDetailPage() {
     try {
       const v = await getVideo(videoId!)
       setVideo(v)
-      if (v.status === 'done') {
-        const evts = await listEvents(videoId!)
-        setEvents(evts.events)
-      }
       const runs = await listModelRuns(videoId!).catch(() => ({ runs: [] }))
       setModelRuns(runs.runs)
     } catch (e: any) {
       setError(e.message)
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleProcess() {
-    if (!videoId) return
-    setProcessing(true)
-    setError('')
-    try {
-      await processVideo(videoId)
-      // 刷新状态
-      const v = await getVideo(videoId)
-      setVideo(v)
-      const evts = await listEvents(videoId)
-      setEvents(evts.events)
-    } catch (e: any) {
-      setError(e.message || '处理失败')
-    } finally {
-      setProcessing(false)
     }
   }
 
@@ -77,27 +47,6 @@ export default function VideoDetailPage() {
     } finally {
       setModelRunning(false)
     }
-  }
-
-  async function handleReview(eventId: string, status: string, label?: string) {
-    await reviewEvent(eventId, status, label)
-    setEvents((prev) =>
-      prev.map((e) =>
-        e.event_id === eventId
-          ? { ...e, status: status as EventItem['status'], ...(label ? { type: label } : {}) }
-          : e
-      )
-    )
-  }
-
-  async function handleExport() {
-    if (!videoId) return
-    const data = await exportAnnotations(videoId)
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `annotations_${videoId}.json`; a.click()
-    URL.revokeObjectURL(url)
   }
 
   if (loading) return <div className="loading"><span className="spinner" /> 加载中...</div>
@@ -117,18 +66,8 @@ export default function VideoDetailPage() {
            video.status === 'failed' ? '失败' : video.status}
         </span>
 
-        {video.status === 'uploaded' && (
-          <button className="btn btn-primary" onClick={handleProcess} disabled={processing}>
-            {processing ? <><span className="spinner" /> 分析中...</> : '⚡ 开始分析'}
-          </button>
-        )}
-
-        {video.status === 'done' && events.length > 0 && (
-          <button className="btn btn-outline btn-sm" onClick={handleExport}>📥 导出标注</button>
-        )}
-
         <button className="btn btn-primary btn-sm" onClick={handleModelRun} disabled={modelRunning}>
-          {modelRunning ? <><span className="spinner" /> 创建中...</> : '开始模型剪辑'}
+          {modelRunning ? <><span className="spinner" /> 创建中...</> : '重新模型剪辑'}
         </button>
       </div>
 
@@ -147,22 +86,13 @@ export default function VideoDetailPage() {
         </div>
       )}
 
-      {video.status === 'done' && (
-        <div className="events-section">
-          <h3>疑似关键行为 <span className="event-count">({events.length} 个事件)</span></h3>
-
-          {events.length === 0 ? (
-            <div className="empty-state">
-              <div className="icon">🔍</div>
-              <p>未检测到明显的关键行为</p>
-            </div>
-          ) : (
-            events.map((evt) => (
-              <EventCard key={evt.event_id} event={evt} onReview={handleReview} />
-            ))
-          )}
-        </div>
-      )}
+      <div className="empty-state">
+        <div className="icon">⌕</div>
+        <p>该视频的关键行为剪辑由模型剪辑任务生成。</p>
+        <p style={{ fontSize: '0.85rem', marginTop: 8 }}>
+          上传页选择视频会自动创建任务；这里可查看历史或重新剪辑。
+        </p>
+      </div>
 
       {video.status === 'failed' && (
         <div className="empty-state">
