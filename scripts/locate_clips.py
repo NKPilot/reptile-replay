@@ -39,7 +39,35 @@ DEFAULT_MODELS_DIR = PROJECT_ROOT / "models"
 DEFAULT_OUTPUT = PROJECT_ROOT / "data" / "results" / "locateanything_test.json"
 DEFAULT_PREVIEW_DIR = PROJECT_ROOT / "data" / "results" / "locateanything_preview"
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".ts"}
-DEFAULT_PROMPTS = ["reptile", "snake", "lizard", "gecko", "turtle"]
+DEFAULT_PROMPTS = [
+    "reptile",
+    "snake",
+    "lizard",
+    "gecko",
+    "turtle",
+    "food",
+    "prey",
+    "shed skin",
+    "water bowl",
+    "human hand",
+]
+
+REPTILE_LABELS = {"reptile", "snake", "lizard", "gecko", "turtle", "locateanything"}
+FOOD_LABELS = {"food", "prey", "insect", "mouse", "worm"}
+SHED_LABELS = {"shed skin", "skin", "shedding skin"}
+WATER_LABELS = {"water bowl", "water", "bowl"}
+HUMAN_LABELS = {"human hand", "hand", "person", "human"}
+
+BEHAVIOR_LABEL_CN = {
+    "feeding_or_strike": "疑似进食/捕食",
+    "shedding": "疑似蜕皮",
+    "moving": "移动/探索",
+    "resting": "静止/休息",
+    "drinking": "疑似饮水",
+    "interaction": "外部互动",
+    "contact_mating_like": "疑似接触/交配",
+    "unknown": "不确定",
+}
 
 
 @dataclass
@@ -199,7 +227,26 @@ class LocateAnythingWorker:
         max_new_tokens: int,
         temperature: float,
         verbose: bool,
+        combined_prompts: bool,
     ) -> dict[str, Any]:
+        if not combined_prompts:
+            answers = []
+            boxes = []
+            for category in categories:
+                prompt = f"Locate all the instances that matches the following description: {category}."
+                result = self.predict(
+                    image,
+                    prompt,
+                    generation_mode=generation_mode,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    verbose=verbose,
+                )
+                answers.append(f"[{category}] {result.get('answer', '')}")
+                for box in result["boxes"]:
+                    boxes.append({**box, "label": category})
+            return {"answer": "\n".join(answers), "boxes": boxes}
+
         cats = "</c>".join(categories)
         prompt = f"Locate all the instances that matches the following description: {cats}."
         return self.predict(
@@ -360,6 +407,252 @@ def clamp_box(box: dict[str, Any], width: int, height: int) -> dict[str, float]:
     return {**box, "x1": x1, "y1": y1, "x2": x2, "y2": y2}
 
 
+def normalize_label(label: Any) -> str:
+    return re.sub(r"\s+", " ", str(label or "").strip().lower())
+
+
+def detection_group(det: dict[str, Any]) -> str:
+    label = normalize_label(det.get("label"))
+    if label in REPTILE_LABELS or any(token in label for token in ("reptile", "snake", "lizard", "gecko", "turtle")):
+        return "reptile"
+    if label in FOOD_LABELS or any(token in label for token in ("food", "prey", "insect", "mouse", "worm")):
+        return "food"
+    if label in SHED_LABELS or "shed" in label:
+        return "shed"
+    if label in WATER_LABELS or ("water" in label and "bowl" in label):
+        return "water"
+    if label in HUMAN_LABELS or "hand" in label or "human" in label or "person" in label:
+        return "human"
+    return "other"
+
+
+def box_area(box: dict[str, Any]) -> float:
+    return max(0.0, float(box["x2"]) - float(box["x1"])) * max(0.0, float(box["y2"]) - float(box["y1"]))
+
+
+def box_distance(a: dict[str, Any], b: dict[str, Any]) -> float:
+    ax = (float(a["x1"]) + float(a["x2"])) / 2
+    ay = (float(a["y1"]) + float(a["y2"])) / 2
+    bx = (float(b["x1"]) + float(b["x2"])) / 2
+    by = (float(b["y1"]) + float(b["y2"])) / 2
+    aw = max(1.0, float(a["x2"]) - float(a["x1"]))
+    ah = max(1.0, float(a["y2"]) - float(a["y1"]))
+    scale = max(aw, ah, 1.0)
+    return float(((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5 / scale)
+
+
+def has_near_object(
+    frame_results: list[dict[str, Any]],
+    object_group: str,
+    max_distance: float = 1.8,
+) -> bool:
+    for frame in frame_results:
+        reptile_boxes = [d for d in frame["detections"] if detection_group(d) == "reptile"]
+        object_boxes = [d for d in frame["detections"] if detection_group(d) == object_group]
+        if reptile_boxes and object_boxes:
+            if min(box_distance(r, o) for r in reptile_boxes for o in object_boxes) <= max_distance:
+                return True
+    return False
+
+
+def count_multi_reptile_frames(frame_results: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for frame in frame_results
+        if sum(1 for det in frame["detections"] if detection_group(det) == "reptile") >= 2
+    )
+
+
+def has_near_reptile_pair(frame_results: list[dict[str, Any]], max_distance: float = 1.4) -> bool:
+    for frame in frame_results:
+        reptile_boxes = [d for d in frame["detections"] if detection_group(d) == "reptile"]
+        for index, box in enumerate(reptile_boxes):
+            for other in reptile_boxes[index + 1:]:
+                if box_distance(box, other) <= max_distance:
+                    return True
+    return False
+
+
+def reptile_frame_flags(frame_results: list[dict[str, Any]]) -> list[bool]:
+    return [
+        any(detection_group(det) == "reptile" for det in frame["detections"])
+        for frame in frame_results
+    ]
+
+
+def continuous_segments(flags: list[bool], timestamps: list[float]) -> list[dict[str, Any]]:
+    segments = []
+    start: int | None = None
+    for index, flag in enumerate(flags + [False]):
+        if flag and start is None:
+            start = index
+        if not flag and start is not None:
+            end = index - 1
+            segments.append(
+                {
+                    "start_frame": start,
+                    "end_frame": end,
+                    "start_sec": timestamps[start] if start < len(timestamps) else 0.0,
+                    "end_sec": timestamps[end] if end < len(timestamps) else 0.0,
+                    "length": end - start + 1,
+                }
+            )
+            start = None
+    return segments
+
+
+def motion_profile(samples: list[SampledFrame], frame_results: list[dict[str, Any]]) -> dict[str, float]:
+    if len(samples) < 2:
+        return {
+            "avg_motion": 0.0,
+            "peak_motion": 0.0,
+            "motion_ratio": 0.0,
+            "roi_motion_ratio": 0.0,
+            "texture_change": 0.0,
+        }
+
+    grays = []
+    for sample in samples:
+        arr = cv2.cvtColor(np.array(sample.image), cv2.COLOR_RGB2GRAY)
+        width = 160
+        height = max(1, int(arr.shape[0] * width / max(arr.shape[1], 1)))
+        grays.append(cv2.resize(arr, (width, height), interpolation=cv2.INTER_AREA))
+
+    motions = []
+    roi_ratios = []
+    texture_changes = []
+    for index in range(1, len(grays)):
+        diff = cv2.absdiff(grays[index - 1], grays[index])
+        motion = float(np.mean(diff) / 255.0)
+        motions.append(motion)
+
+        prev_lap = cv2.Laplacian(grays[index - 1], cv2.CV_32F)
+        curr_lap = cv2.Laplacian(grays[index], cv2.CV_32F)
+        texture_changes.append(float(np.mean(np.abs(curr_lap - prev_lap)) / 255.0))
+
+        source_width, source_height = samples[index].image.size
+        mask = np.zeros_like(diff, dtype=np.uint8)
+        for det in frame_results[index].get("detections", []):
+            if detection_group(det) != "reptile":
+                continue
+            x1 = int(float(det["x1"]) / max(source_width, 1) * mask.shape[1])
+            x2 = int(float(det["x2"]) / max(source_width, 1) * mask.shape[1])
+            y1 = int(float(det["y1"]) / max(source_height, 1) * mask.shape[0])
+            y2 = int(float(det["y2"]) / max(source_height, 1) * mask.shape[0])
+            mask[max(0, y1):max(0, y2), max(0, x1):max(0, x2)] = 1
+
+        total_energy = float(np.sum(diff))
+        if total_energy > 0 and np.any(mask):
+            roi_ratios.append(float(np.sum(diff * mask) / total_energy))
+
+    avg_motion = float(np.mean(motions)) if motions else 0.0
+    peak_motion = float(max(motions)) if motions else 0.0
+    active_threshold = max(0.015, avg_motion * 1.4)
+    return {
+        "avg_motion": round(avg_motion, 4),
+        "peak_motion": round(peak_motion, 4),
+        "motion_ratio": round(sum(1 for m in motions if m >= active_threshold) / max(len(motions), 1), 4),
+        "roi_motion_ratio": round(float(np.mean(roi_ratios)) if roi_ratios else 0.0, 4),
+        "texture_change": round(float(np.mean(texture_changes)) if texture_changes else 0.0, 4),
+    }
+
+
+def behavior_candidates(
+    frame_results: list[dict[str, Any]],
+    motion: dict[str, float],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    sampled_frames = max(len(frame_results), 1)
+    flags = reptile_frame_flags(frame_results)
+    detected_frames = sum(1 for flag in flags if flag)
+    continuity = detected_frames / sampled_frames
+    segments = continuous_segments(flags, [float(frame.get("timestamp_sec") or 0.0) for frame in frame_results])
+    longest_segment = max((segment["length"] for segment in segments), default=0)
+    longest_ratio = longest_segment / sampled_frames
+
+    reptile_boxes = [
+        det
+        for frame in frame_results
+        for det in frame["detections"]
+        if detection_group(det) == "reptile"
+    ]
+    avg_box_area = 0.0
+    if reptile_boxes:
+        first_frame = next((frame for frame in frame_results if frame["detections"]), None)
+        frame_area = 1.0
+        if first_frame:
+            all_boxes = first_frame["detections"]
+            max_x = max(float(det["x2"]) for det in all_boxes)
+            max_y = max(float(det["y2"]) for det in all_boxes)
+            frame_area = max(max_x * max_y, 1.0)
+        avg_box_area = min(float(np.mean([box_area(box) / frame_area for box in reptile_boxes])), 1.0)
+
+    near_food = has_near_object(frame_results, "food")
+    near_shed = has_near_object(frame_results, "shed", max_distance=2.4)
+    near_water = has_near_object(frame_results, "water")
+    near_human = has_near_object(frame_results, "human", max_distance=2.2)
+    multi_reptile_ratio = count_multi_reptile_frames(frame_results) / sampled_frames
+    near_reptile_pair = has_near_reptile_pair(frame_results)
+    objects = sorted({detection_group(det) for frame in frame_results for det in frame["detections"]})
+
+    roi_motion = motion["roi_motion_ratio"]
+    peak_motion = motion["peak_motion"]
+    avg_motion = motion["avg_motion"]
+    texture_change = motion["texture_change"]
+
+    scores = {
+        "feeding_or_strike": 0.10 + continuity * 0.18 + roi_motion * 0.25 + min(peak_motion / 0.08, 1.0) * 0.20,
+        "shedding": 0.08 + continuity * 0.24 + longest_ratio * 0.16 + min(texture_change / 0.08, 1.0) * 0.18,
+        "moving": 0.12 + continuity * 0.22 + roi_motion * 0.20 + min(avg_motion / 0.05, 1.0) * 0.18,
+        "resting": 0.08 + continuity * 0.28 + max(0.0, 1.0 - min(avg_motion / 0.025, 1.0)) * 0.22,
+        "drinking": 0.06 + continuity * 0.16 + roi_motion * 0.14,
+        "interaction": 0.06 + continuity * 0.14 + min(peak_motion / 0.08, 1.0) * 0.12,
+        "contact_mating_like": 0.07 + continuity * 0.18 + multi_reptile_ratio * 0.24 + roi_motion * 0.16,
+    }
+
+    if near_food:
+        scores["feeding_or_strike"] += 0.28
+    if near_shed:
+        scores["shedding"] += 0.26
+    if near_water:
+        scores["drinking"] += 0.30
+    if near_human:
+        scores["interaction"] += 0.26
+        scores["feeding_or_strike"] -= 0.10
+        scores["contact_mating_like"] -= 0.08
+    if near_reptile_pair:
+        scores["contact_mating_like"] += 0.22
+    if multi_reptile_ratio > 0 and peak_motion < 0.08:
+        scores["contact_mating_like"] += 0.10
+    if avg_box_area > 0:
+        scores["moving"] += min(avg_box_area * 0.25, 0.08)
+        scores["resting"] += min(avg_box_area * 0.20, 0.06)
+
+    if detected_frames == 0:
+        scores = {"unknown": 0.35}
+    else:
+        scores["unknown"] = max(0.05, 0.32 - continuity * 0.18)
+
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:3]
+    candidates = [
+        {
+            "label": label,
+            "label_cn": BEHAVIOR_LABEL_CN.get(label, label),
+            "confidence": round(max(0.0, min(score, 0.95)), 2),
+        }
+        for label, score in ranked
+    ]
+    features = {
+        **motion,
+        "reptile_continuity": round(continuity, 4),
+        "longest_reptile_segment_ratio": round(longest_ratio, 4),
+        "multi_reptile_frame_ratio": round(multi_reptile_ratio, 4),
+        "near_reptile_pair": near_reptile_pair,
+        "reptile_segments": segments,
+        "objects": objects,
+    }
+    return candidates, features
+
+
 def draw_preview(image: Image.Image, detections: list[dict[str, Any]], title: str, output_path: Path):
     preview = image.copy()
     draw = ImageDraw.Draw(preview)
@@ -390,7 +683,11 @@ def draw_preview(image: Image.Image, detections: list[dict[str, Any]], title: st
 
 
 def summarize_clip(frame_results: list[dict[str, Any]]) -> dict[str, Any]:
-    detected_frames = sum(1 for frame in frame_results if frame["detections"])
+    detected_frames = sum(
+        1
+        for frame in frame_results
+        if any(detection_group(det) == "reptile" for det in frame["detections"])
+    )
     detections = sum(len(frame["detections"]) for frame in frame_results)
     labels = sorted(
         {
@@ -473,6 +770,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     max_new_tokens=args.max_new_tokens,
                     temperature=args.temperature,
                     verbose=args.model_verbose,
+                    combined_prompts=args.locateanything_combined_prompts,
                 )
             else:
                 result = worker.detect(sample.image, prompts)
@@ -506,12 +804,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
 
         summary = summarize_clip(frame_results)
+        candidates, behavior_features = behavior_candidates(frame_results, motion_profile(samples, frame_results))
+        best_candidate = candidates[0] if candidates else {
+            "label": "unknown",
+            "label_cn": BEHAVIOR_LABEL_CN["unknown"],
+            "confidence": 0.0,
+        }
         clips.append(
             {
                 "clip_path": str(clip_path.relative_to(PROJECT_ROOT)),
                 "video_meta": video_meta,
                 "elapsed_sec": time.perf_counter() - clip_started,
                 **summary,
+                "auto_label": best_candidate["label"],
+                "label_cn": best_candidate["label_cn"],
+                "confidence": best_candidate["confidence"],
+                "candidate_labels": [candidate["label"] for candidate in candidates],
+                "behavior_candidates": candidates,
+                "behavior_features": behavior_features,
                 "frames": frame_results,
             }
         )
@@ -572,6 +882,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-new-tokens", type=int, default=2048, help="LocateAnything generation budget")
     parser.add_argument("--temperature", type=float, default=0.0, help="LocateAnything sampling temperature")
     parser.add_argument("--model-verbose", action="store_true", help="Pass verbose=True into LocateAnything generate")
+    parser.add_argument(
+        "--locateanything-combined-prompts",
+        action="store_true",
+        help="Run LocateAnything once with all prompts. Faster, but boxes use a generic label.",
+    )
     return parser
 
 

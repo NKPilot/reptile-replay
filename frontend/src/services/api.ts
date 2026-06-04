@@ -247,6 +247,32 @@ export interface LocatorFrame {
   raw_answer?: string | null
 }
 
+export interface LocatorBehaviorCandidate {
+  label: string
+  label_cn: string
+  confidence: number
+}
+
+export interface LocatorBehaviorFeatures {
+  avg_motion?: number
+  peak_motion?: number
+  motion_ratio?: number
+  roi_motion_ratio?: number
+  texture_change?: number
+  reptile_continuity?: number
+  longest_reptile_segment_ratio?: number
+  multi_reptile_frame_ratio?: number
+  near_reptile_pair?: boolean
+  objects?: string[]
+  reptile_segments?: Array<{
+    start_frame: number
+    end_frame: number
+    start_sec: number
+    end_sec: number
+    length: number
+  }>
+}
+
 export interface LocatorClip {
   clip_path: string
   clip_url: string | null
@@ -262,6 +288,12 @@ export interface LocatorClip {
   total_detections: number
   has_reptile: boolean
   labels: string[]
+  auto_label?: string
+  label_cn?: string
+  confidence?: number
+  candidate_labels?: string[]
+  behavior_candidates?: LocatorBehaviorCandidate[]
+  behavior_features?: LocatorBehaviorFeatures
   frames: LocatorFrame[]
 }
 

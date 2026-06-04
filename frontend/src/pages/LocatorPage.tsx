@@ -55,7 +55,13 @@ export default function LocatorPage() {
 
   const clips = useMemo(() => {
     const items = detail?.clips || []
-    return onlyDetected ? items.filter(c => c.has_reptile) : items
+    const filtered = onlyDetected ? items.filter(c => c.has_reptile) : items
+    return [...filtered].sort((a, b) => {
+      const aConf = a.confidence ?? a.behavior_candidates?.[0]?.confidence ?? 0
+      const bConf = b.confidence ?? b.behavior_candidates?.[0]?.confidence ?? 0
+      if (bConf !== aConf) return bConf - aConf
+      return b.detected_frames - a.detected_frames
+    })
   }, [detail, onlyDetected])
 
   function formatDateTime(iso: string) {
@@ -84,6 +90,30 @@ export default function LocatorPage() {
     return frames.find(f => f.preview_url && f.detections.length > 0)?.preview_url
       || frames.find(f => f.preview_url)?.preview_url
       || null
+  }
+
+  function confidenceText(value?: number) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+    return `${Math.round(value * 100)}%`
+  }
+
+  function topCandidates(clip: LocatorClip) {
+    return (clip.behavior_candidates || []).slice(0, 3)
+  }
+
+  function renderBehaviorCandidates(clip: LocatorClip, compact = false) {
+    const candidates = topCandidates(clip)
+    if (candidates.length === 0) return null
+    return (
+      <div className={compact ? 'locator-candidates compact' : 'locator-candidates'}>
+        {candidates.map((candidate, index) => (
+          <span key={`${candidate.label}-${index}`} className={`locator-candidate rank-${index + 1}`}>
+            <strong>{candidate.label_cn || candidate.label}</strong>
+            <em>{confidenceText(candidate.confidence)}</em>
+          </span>
+        ))}
+      </div>
+    )
   }
 
   function renderFrame(frame: LocatorFrame) {
@@ -126,9 +156,15 @@ export default function LocatorPage() {
             <span className={`locator-badge ${clip.has_reptile ? 'locator-badge-hit' : 'locator-badge-miss'}`}>
               {clip.has_reptile ? '检出爬宠' : '未检出'}
             </span>
+            {clip.label_cn && (
+              <span className="locator-badge locator-badge-behavior">
+                {clip.label_cn} {confidenceText(clip.confidence)}
+              </span>
+            )}
             <span className="locator-badge">{clip.detected_frames}/{clip.sampled_frames} 帧</span>
             <span className="locator-badge">{clip.total_detections} 框</span>
           </div>
+          {renderBehaviorCandidates(clip, true)}
           <div className="locator-clip-meta">
             <span>{formatSeconds(clip.elapsed_sec)}</span>
             {clip.video_meta?.duration_sec ? <span>{formatSeconds(clip.video_meta.duration_sec)}</span> : null}
@@ -235,10 +271,26 @@ export default function LocatorPage() {
                 <span className={`locator-badge ${preview.has_reptile ? 'locator-badge-hit' : 'locator-badge-miss'}`}>
                   {preview.has_reptile ? '检出爬宠' : '未检出'}
                 </span>
+                {preview.label_cn && (
+                  <span className="locator-badge locator-badge-behavior">
+                    {preview.label_cn} {confidenceText(preview.confidence)}
+                  </span>
+                )}
                 <span className="locator-badge">{preview.detected_frames}/{preview.sampled_frames} 帧</span>
                 <span className="locator-badge">{preview.total_detections} 框</span>
               </div>
             </div>
+            {renderBehaviorCandidates(preview)}
+            {preview.behavior_features && (
+              <div className="locator-feature-grid">
+                <div><span>连续检出</span><strong>{confidenceText(preview.behavior_features.reptile_continuity)}</strong></div>
+                <div><span>ROI 运动</span><strong>{confidenceText(preview.behavior_features.roi_motion_ratio)}</strong></div>
+                <div><span>运动峰值</span><strong>{(preview.behavior_features.peak_motion ?? 0).toFixed(3)}</strong></div>
+                <div><span>多爬宠帧</span><strong>{confidenceText(preview.behavior_features.multi_reptile_frame_ratio)}</strong></div>
+                <div><span>近距离双目标</span><strong>{preview.behavior_features.near_reptile_pair ? '是' : '否'}</strong></div>
+                <div><span>对象</span><strong>{preview.behavior_features.objects?.join(', ') || '-'}</strong></div>
+              </div>
+            )}
             <div className="locator-frame-grid">
               {preview.frames.map(renderFrame)}
             </div>

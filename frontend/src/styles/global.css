@@ -540,6 +540,32 @@ body {
 }
 .locator-badge-hit { background: #052e16; color: #4ade80; }
 .locator-badge-miss { background: #3f3f46; color: #a1a1aa; }
+.locator-badge-behavior { background: #172554; color: #93c5fd; }
+.locator-candidates {
+  display: grid; gap: 8px; margin: 12px 0 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.locator-candidates.compact {
+  display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 0;
+}
+.locator-candidate {
+  min-width: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  border: 1px solid var(--border); border-radius: 6px; background: #111827;
+  color: var(--text); padding: 8px 10px; font-size: 0.8rem;
+}
+.locator-candidates.compact .locator-candidate {
+  padding: 2px 6px; font-size: 0.68rem; border-radius: 4px; max-width: 100%;
+}
+.locator-candidate strong {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: inherit; font-weight: 700;
+}
+.locator-candidate em {
+  font-style: normal; color: #bfdbfe; font-weight: 700; flex: 0 0 auto;
+}
+.locator-candidate.rank-1 { border-color: #2563eb; }
+.locator-candidate.rank-2 { border-color: #334155; }
+.locator-candidate.rank-3 { border-color: #27272a; }
 .locator-clip-meta {
   display: flex; gap: 10px; margin-top: 8px;
   color: var(--text-dim); font-size: 0.72rem;
@@ -561,6 +587,21 @@ body {
 }
 .locator-preview-head h3 {
   font-size: 1rem; word-break: break-all; min-width: 0;
+}
+.locator-feature-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px; margin-bottom: 14px;
+}
+.locator-feature-grid div {
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+  padding: 8px 10px; min-width: 0;
+}
+.locator-feature-grid span {
+  display: block; color: var(--text-dim); font-size: 0.72rem; margin-bottom: 3px;
+}
+.locator-feature-grid strong {
+  display: block; color: var(--text); font-size: 0.86rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .locator-frame-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -598,4 +639,6 @@ body {
   .locator-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .locator-toolbar select { min-width: 100%; }
   .locator-preview-head { flex-direction: column; }
+  .locator-candidates { grid-template-columns: 1fr; }
+  .locator-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
