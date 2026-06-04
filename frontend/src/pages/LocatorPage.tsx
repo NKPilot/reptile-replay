@@ -220,7 +220,7 @@ export default function LocatorPage() {
     <div className="locator-page">
       <div className="clips-header">
         <h1>模型剪辑</h1>
-        <p className="clips-subtitle">单视频 LocateAnything 行为候选剪辑结果</p>
+        <p className="clips-subtitle">模型直接识别并剪辑出的关键行为片段</p>
 
         <div className="filter-bar locator-toolbar">
           <select
@@ -268,7 +268,7 @@ export default function LocatorPage() {
               <strong>{statusText(detail.status)}</strong>
             </div>
             <div>
-              <span>行为片段</span>
+              <span>关键片段</span>
               <strong>{detail.visible_clip_count}/{detail.clip_count}</strong>
             </div>
             <div>
@@ -293,7 +293,7 @@ export default function LocatorPage() {
           ) : detail.status === 'failed' ? (
             <div className="empty-state"><p>{detail.error || '模型剪辑失败'}</p></div>
           ) : clips.length === 0 ? (
-            <div className="empty-state"><p>没有检出有爬宠且带具体行为候选的片段</p></div>
+            <div className="empty-state"><p>没有剪辑出有爬宠且带具体行为的片段</p></div>
           ) : (
             <div className="locator-grid">
               {clips.map(renderClip)}

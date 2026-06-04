@@ -11,13 +11,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .video_processor import get_video, import_source_video, process_video
+from .video_processor import get_video, import_source_video
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 MODEL_RUNS_DIR = PROJECT_ROOT / "data" / "model_runs"
 RESULTS_DIR = PROJECT_ROOT / "data" / "results" / "model_runs"
-EVENTS_DIR = PROJECT_ROOT / "data" / "events"
 DEFAULT_MODEL_DIR = PROJECT_ROOT / "models" / "locateanything-3b"
+SEGMENT_SECONDS = 5
+SEGMENT_WIDTH = 640
+SEGMENT_FPS = 8
 
 
 def init_model_run_storage():
@@ -94,6 +96,8 @@ def create_model_run(video_id: str | None = None, source_video_id: str | None = 
         "clip_count": 0,
         "visible_clip_count": 0,
         "behavior_distribution": {},
+        "candidate_strategy": "fixed_segments",
+        "segment_seconds": SEGMENT_SECONDS,
         "result_path": str((RESULTS_DIR / f"{run_id}.json").relative_to(PROJECT_ROOT)),
     }
     _write_run(record)
@@ -112,13 +116,18 @@ def execute_model_run(run_id: str):
 
     try:
         video_id = record["video_id"]
-        process_result = process_video(video_id)
-        if process_result.get("error"):
-            raise RuntimeError(process_result["error"])
+        video = get_video(video_id)
+        if not video:
+            raise RuntimeError(f"视频不存在: {video_id}")
 
-        clips_dir = EVENTS_DIR / video_id
-        if not clips_dir.exists() or not list(clips_dir.glob("*.mp4")):
-            raise RuntimeError("没有生成候选剪辑")
+        video_path = Path(str(video.get("file_path", "")))
+        if not video_path.exists():
+            raise RuntimeError("视频文件不存在")
+
+        clips_dir = RESULTS_DIR / f"{run_id}_clips"
+        clip_count = _split_video_for_model(video_path, clips_dir, run_id)
+        if clip_count <= 0:
+            raise RuntimeError("没有生成模型候选剪辑")
 
         output = RESULTS_DIR / f"{run_id}.json"
         preview_dir = RESULTS_DIR / f"{run_id}_preview"
@@ -193,6 +202,38 @@ def _visible_clips(clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(visible, key=lambda clip: float(clip.get("confidence") or 0), reverse=True)
 
 
+def _split_video_for_model(video_path: Path, output_dir: Path, run_id: str) -> int:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_template = str(output_dir / f"{run_id}_%05d.mp4")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_path),
+        "-vf",
+        f"scale={SEGMENT_WIDTH}:-2,fps={SEGMENT_FPS}",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "28",
+        "-f",
+        "segment",
+        "-segment_time",
+        str(SEGMENT_SECONDS),
+        "-reset_timestamps",
+        "1",
+        output_template,
+    ]
+    completed = subprocess.run(cmd, cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=1800)
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(stderr[-800:] or "视频切片失败")
+    return len(list(output_dir.glob(f"{run_id}_*.mp4")))
+
+
 def _summarize_run(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "run_id": record.get("run_id", ""),
@@ -208,6 +249,8 @@ def _summarize_run(record: dict[str, Any]) -> dict[str, Any]:
         "visible_clip_count": int(record.get("visible_clip_count") or 0),
         "behavior_distribution": record.get("behavior_distribution", {}),
         "duration_seconds": float(record.get("duration_seconds") or 0),
+        "candidate_strategy": record.get("candidate_strategy", "fixed_segments"),
+        "segment_seconds": int(record.get("segment_seconds") or SEGMENT_SECONDS),
     }
 
 
