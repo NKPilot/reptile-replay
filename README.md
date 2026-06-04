@@ -92,6 +92,8 @@ mkdir -p logs
 nohup ./start.sh > logs/app.log 2>&1 & echo $! > logs/app.pid
 ```
 
+`start.sh` 当前启动的是带热重载的开发服务：后端使用 `uvicorn --reload`，前端使用 Vite dev server。代码更新后通常会自动 reload；如果更新了依赖、`.env`、`start.sh` 或端口配置，则需要按下面的停止命令重启服务。
+
 查看本次后台启动的 PID：
 
 ```bash
