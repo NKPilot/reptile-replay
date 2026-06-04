@@ -33,6 +33,8 @@ LocateAnything-3B 模型下载脚本 —— 从 ModelScope 下载 NVIDIA 视觉�
 """
 
 import argparse
+import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -46,18 +48,17 @@ MODEL_SIZE_ESTIMATE = "~6GB (fp16)"
 
 def check_modelscope() -> bool:
     """检查 modelscope SDK 是否可用。"""
-    try:
-        import modelscope  # noqa: F401
-        return True
-    except ImportError:
+    if importlib.util.find_spec("modelscope") is None:
         print("❌ 需要 modelscope SDK")
         print("   请运行: pip install modelscope")
         return False
+    return True
 
 
 def download(models_dir: Path, force: bool = False) -> bool:
     """从 ModelScope 下载 LocateAnything-3B。"""
-    from modelscope import snapshot_download
+    modelscope = importlib.import_module("modelscope")
+    snapshot_download = modelscope.snapshot_download
 
     save_dir = models_dir / MODEL_NAME
 
@@ -119,13 +120,13 @@ def main():
     models_dir = Path(args.models_dir)
 
     print(f"\n{'='*60}")
-    print(f"  LocateAnything-3B 模型下载")
+    print("  LocateAnything-3B 模型下载")
     print(f"{'='*60}")
     print(f"  来源: ModelScope ({MODEL_REPO})")
     print(f"  目录: {models_dir / MODEL_NAME}")
     print(f"  大小: {MODEL_SIZE_ESTIMATE}")
     if args.dry_run:
-        print(f"  模式: 预览 (--dry-run)")
+        print("  模式: 预览 (--dry-run)")
     print()
 
     if args.dry_run:
@@ -142,21 +143,21 @@ def main():
         print(f"\n{'='*60}")
         print(f"  模型就绪: {model_path}")
         print()
-        print(f"  下一步 —— 在 clipping pipeline 中的使用方式:")
-        print(f"  ──────────────────────────────────────────────")
-        print(f"  见 scripts/ 目录下后续的 reptile_locate.py")
-        print(f"  核心思路:")
-        print(f"    ┌─ pipeline ───────────────────────────┐")
-        print(f"    │ 1. 视频切片 (split_video)              │")
-        print(f"    │ 2. 爬宠定位 (LocateAnything)  ← new    │")
-        print(f"    │    抽样帧 → prompt='reptile' → bbox    │")
-        print(f"    │    过滤: 无爬宠帧占比>80% → 丢弃clip   │")
-        print(f"    │ 3. 运动检测 (motion detector)          │")
-        print(f"    │    仅在爬宠 bbox 区域内分析运动         │")
-        print(f"    │ 4. 行为分类 (auto_label)               │")
-        print(f"    │ 5. 剪辑输出                            │")
-        print(f"    └───────────────────────────────────────┘")
-        print(f"  ──────────────────────────────────────────────")
+        print("  下一步 —— 在 clipping pipeline 中的使用方式:")
+        print("  ──────────────────────────────────────────────")
+        print("  见 scripts/ 目录下后续的 reptile_locate.py")
+        print("  核心思路:")
+        print("    ┌─ pipeline ───────────────────────────┐")
+        print("    │ 1. 视频切片 (split_video)              │")
+        print("    │ 2. 爬宠定位 (LocateAnything)  ← new    │")
+        print("    │    抽样帧 → prompt='reptile' → bbox    │")
+        print("    │    过滤: 无爬宠帧占比>80% → 丢弃clip   │")
+        print("    │ 3. 运动检测 (motion detector)          │")
+        print("    │    仅在爬宠 bbox 区域内分析运动         │")
+        print("    │ 4. 行为分类 (auto_label)               │")
+        print("    │ 5. 剪辑输出                            │")
+        print("    └───────────────────────────────────────┘")
+        print("  ──────────────────────────────────────────────")
         print(f"{'='*60}\n")
 
 
