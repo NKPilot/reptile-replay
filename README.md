@@ -96,6 +96,17 @@ npm install
 npm run dev
 ```
 
+### Ollama 云端复核（可选）
+
+模型剪辑任务会先用 LocateAnything 召回候选片段。配置 Ollama 云端 key 后，后端会把候选片段的关键帧发给多模态大模型复核，并用 `final_label` 作为前端展示标签。
+
+```bash
+cp .env.example .env
+# 然后编辑 .env，填入 OLLAMA_API_KEY
+```
+
+后端启动时会自动读取项目根目录的 `.env`。未配置 `OLLAMA_API_KEY` 时，模型剪辑仍会正常运行，只使用 LocateAnything/规则标签。
+
 ## 🔧 使用流程
 
 ### 1. 下载视频

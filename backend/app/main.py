@@ -16,6 +16,10 @@ PROJECT_ROOT = BACKEND_DIR.parent
 sys.path.insert(0, str(BACKEND_DIR))  # 让 from app import ... 可用
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.services.env_loader import load_dotenv
+
+load_dotenv(PROJECT_ROOT / ".env")
+
 # 确保 ffmpeg/yt-dlp 在 PATH 中
 os.environ["PATH"] = os.path.expanduser("~/.local/bin") + ":" + os.environ.get("PATH", "")
 
