@@ -475,6 +475,9 @@ body {
 }
 .stat-usable { background: #052e16; color: #4ade80; }
 .stat-unknown { background: #422006; color: #f59e0b; }
+.material-action {
+  margin-top: 6px; color: var(--accent); font-size: 0.74rem; font-weight: 700;
+}
 
 /* ========== Locator Results ========== */
 .locator-page { padding: 0 0 40px; }
@@ -592,6 +595,16 @@ body {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px; margin-bottom: 14px;
 }
+.locator-review-box {
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+  padding: 9px 10px; margin-bottom: 14px;
+}
+.locator-review-box span {
+  display: block; color: var(--text-dim); font-size: 0.72rem; margin-bottom: 3px;
+}
+.locator-review-box strong {
+  display: block; color: var(--text); font-size: 0.86rem; font-weight: 600;
+}
 .locator-feature-grid div {
   border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
   padding: 8px 10px; min-width: 0;
@@ -611,10 +624,16 @@ body {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; overflow: hidden;
 }
+.locator-frame-image {
+  display: block; width: 100%; padding: 0; border: 0; background: #111;
+  cursor: zoom-in;
+}
+.locator-frame-image:hover img { transform: scale(1.02); }
 .locator-frame img,
 .locator-frame-empty {
   width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
 }
+.locator-frame img { display: block; transition: transform 160ms ease; }
 .locator-frame-empty {
   display: flex; align-items: center; justify-content: center;
   color: var(--text-dim); background: #111;
@@ -631,6 +650,29 @@ body {
   white-space: pre-wrap; word-break: break-word;
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 6px; padding: 10px; margin-bottom: 8px;
+}
+.frame-lightbox {
+  position: fixed; inset: 0; z-index: 120;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.9); padding: 28px;
+}
+.frame-lightbox figure {
+  width: min(1120px, 94vw); max-height: 92vh; margin: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.frame-lightbox img {
+  width: 100%; max-height: calc(92vh - 42px); object-fit: contain;
+  border-radius: 8px; background: #000;
+}
+.frame-lightbox figcaption {
+  display: flex; gap: 14px; justify-content: center;
+  color: var(--text-dim); font-size: 0.82rem;
+}
+.frame-lightbox .close {
+  position: absolute; top: 20px; right: 20px;
+  background: var(--bg-card); border: none; color: var(--text);
+  width: 40px; height: 40px; border-radius: 50%; font-size: 1.4rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 
 @media (max-width: 720px) {

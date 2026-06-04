@@ -261,6 +261,8 @@ export interface LocatorBehaviorFeatures {
   texture_change?: number
   reptile_continuity?: number
   longest_reptile_segment_ratio?: number
+  food_frame_ratio?: number
+  shed_frame_ratio?: number
   multi_reptile_frame_ratio?: number
   near_reptile_pair?: boolean
   objects?: string[]
@@ -291,6 +293,18 @@ export interface LocatorClip {
   auto_label?: string
   label_cn?: string
   confidence?: number
+  final_label?: string
+  final_label_cn?: string
+  final_confidence?: number
+  final_source?: 'locator' | 'ollama' | string
+  review_status?: 'pending' | 'reviewed' | 'skipped' | 'failed' | string
+  review_model?: string
+  review_error?: string
+  llm_label?: string
+  llm_label_cn?: string
+  llm_confidence?: number
+  llm_reason?: string
+  llm_has_reptile?: boolean
   candidate_labels?: string[]
   behavior_candidates?: LocatorBehaviorCandidate[]
   behavior_features?: LocatorBehaviorFeatures
@@ -329,6 +343,9 @@ export interface ModelRunSummary {
   visible_clip_count: number
   behavior_distribution: Record<string, number>
   duration_seconds: number
+  review_enabled?: boolean
+  review_model?: string
+  reviewed_clip_count?: number
 }
 
 export interface ModelRunDetail extends ModelRunSummary {

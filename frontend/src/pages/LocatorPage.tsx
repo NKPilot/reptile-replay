@@ -20,6 +20,7 @@ export default function LocatorPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState<LocatorClip | null>(null)
+  const [enlargedFrame, setEnlargedFrame] = useState<LocatorFrame | null>(null)
 
   useEffect(() => {
     loadRuns()
@@ -82,8 +83,8 @@ export default function LocatorPage() {
   const clips = useMemo(() => {
     const items = detail?.clips || []
     return [...items].sort((a, b) => {
-      const aConf = a.confidence ?? a.behavior_candidates?.[0]?.confidence ?? 0
-      const bConf = b.confidence ?? b.behavior_candidates?.[0]?.confidence ?? 0
+      const aConf = displayConfidence(a) ?? a.behavior_candidates?.[0]?.confidence ?? 0
+      const bConf = displayConfidence(b) ?? b.behavior_candidates?.[0]?.confidence ?? 0
       if (bConf !== aConf) return bConf - aConf
       return b.detected_frames - a.detected_frames
     })
@@ -122,6 +123,21 @@ export default function LocatorPage() {
     return `${Math.round(value * 100)}%`
   }
 
+  function displayLabel(clip: LocatorClip) {
+    return clip.final_label_cn || clip.label_cn || clip.final_label || clip.auto_label || ''
+  }
+
+  function displayConfidence(clip: LocatorClip) {
+    return clip.final_confidence ?? clip.confidence
+  }
+
+  function reviewText(clip: LocatorClip) {
+    if (clip.final_source === 'ollama') return 'Ollama 复核'
+    if (clip.review_status === 'failed') return '复核失败'
+    if (clip.review_status === 'skipped') return '未复核'
+    return ''
+  }
+
   function statusText(status?: string) {
     const map: Record<string, string> = {
       queued: '排队中',
@@ -130,6 +146,11 @@ export default function LocatorPage() {
       failed: '失败',
     }
     return map[status || ''] || status || '-'
+  }
+
+  function closePreview() {
+    setPreview(null)
+    setEnlargedFrame(null)
   }
 
   function distributionText(distribution?: Record<string, number>) {
@@ -161,7 +182,14 @@ export default function LocatorPage() {
     return (
       <div key={`${frame.frame_index}-${frame.timestamp_sec}`} className="locator-frame">
         {frame.preview_url ? (
-          <img src={frame.preview_url} alt="" loading="lazy" />
+          <button
+            type="button"
+            className="locator-frame-image"
+            onClick={() => setEnlargedFrame(frame)}
+            title="查看大图"
+          >
+            <img src={frame.preview_url} alt="" loading="lazy" />
+          </button>
         ) : (
           <div className="locator-frame-empty">无预览</div>
         )}
@@ -197,11 +225,12 @@ export default function LocatorPage() {
             <span className={`locator-badge ${clip.has_reptile ? 'locator-badge-hit' : 'locator-badge-miss'}`}>
               {clip.has_reptile ? '检出爬宠' : '未检出'}
             </span>
-            {clip.label_cn && (
+            {displayLabel(clip) && (
               <span className="locator-badge locator-badge-behavior">
-                {clip.label_cn} {confidenceText(clip.confidence)}
+                {displayLabel(clip)} {confidenceText(displayConfidence(clip))}
               </span>
             )}
+            {reviewText(clip) && <span className="locator-badge">{reviewText(clip)}</span>}
             <span className="locator-badge">{clip.detected_frames}/{clip.sampled_frames} 帧</span>
             <span className="locator-badge">{clip.total_detections} 框</span>
           </div>
@@ -255,7 +284,7 @@ export default function LocatorPage() {
           <div className="icon">⌕</div>
           <p>暂无模型剪辑结果</p>
           <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>
-            请先在视频详情或素材库中点击开始模型剪辑
+            请先上传视频，或在素材库中选择一个视频
           </p>
         </div>
       )}
@@ -285,6 +314,9 @@ export default function LocatorPage() {
             <span>{formatDateTime(detail.created_at)}</span>
             <span title={detail.run_id}>{detail.run_id}</span>
             <span title={detail.source_title}>{detail.source_title || detail.video_id}</span>
+            {detail.review_enabled ? (
+              <span title={detail.review_model}>复核 {detail.reviewed_clip_count || 0} 个</span>
+            ) : null}
             {detail.error ? <span>{detail.error}</span> : null}
           </div>
 
@@ -305,8 +337,8 @@ export default function LocatorPage() {
       {detailLoading && <div className="loading"><span className="spinner" /> 加载检测结果...</div>}
 
       {preview && (
-        <div className="player-overlay" onClick={() => setPreview(null)}>
-          <button className="close" onClick={() => setPreview(null)}>×</button>
+        <div className="player-overlay" onClick={closePreview}>
+          <button className="close" onClick={closePreview}>×</button>
           <div className="locator-preview-panel" onClick={(e) => e.stopPropagation()}>
             {preview.clip_url && (
               <video src={preview.clip_url} controls style={{ width: '100%', maxHeight: '42vh', background: '#000' }} />
@@ -317,21 +349,30 @@ export default function LocatorPage() {
                 <span className={`locator-badge ${preview.has_reptile ? 'locator-badge-hit' : 'locator-badge-miss'}`}>
                   {preview.has_reptile ? '检出爬宠' : '未检出'}
                 </span>
-                {preview.label_cn && (
+                {displayLabel(preview) && (
                   <span className="locator-badge locator-badge-behavior">
-                    {preview.label_cn} {confidenceText(preview.confidence)}
+                    {displayLabel(preview)} {confidenceText(displayConfidence(preview))}
                   </span>
                 )}
+                {reviewText(preview) && <span className="locator-badge">{reviewText(preview)}</span>}
                 <span className="locator-badge">{preview.detected_frames}/{preview.sampled_frames} 帧</span>
                 <span className="locator-badge">{preview.total_detections} 框</span>
               </div>
             </div>
             {renderBehaviorCandidates(preview)}
+            {(preview.llm_reason || preview.review_error) && (
+              <div className="locator-review-box">
+                <span>{preview.final_source === 'ollama' ? '复核理由' : '复核状态'}</span>
+                <strong>{preview.llm_reason || preview.review_error}</strong>
+              </div>
+            )}
             {preview.behavior_features && (
               <div className="locator-feature-grid">
                 <div><span>连续检出</span><strong>{confidenceText(preview.behavior_features.reptile_continuity)}</strong></div>
                 <div><span>ROI 运动</span><strong>{confidenceText(preview.behavior_features.roi_motion_ratio)}</strong></div>
                 <div><span>运动峰值</span><strong>{(preview.behavior_features.peak_motion ?? 0).toFixed(3)}</strong></div>
+                <div><span>蜕皮帧</span><strong>{confidenceText(preview.behavior_features.shed_frame_ratio)}</strong></div>
+                <div><span>食物/猎物帧</span><strong>{confidenceText(preview.behavior_features.food_frame_ratio)}</strong></div>
                 <div><span>多爬宠帧</span><strong>{confidenceText(preview.behavior_features.multi_reptile_frame_ratio)}</strong></div>
                 <div><span>近距离双目标</span><strong>{preview.behavior_features.near_reptile_pair ? '是' : '否'}</strong></div>
                 <div><span>对象</span><strong>{preview.behavior_features.objects?.join(', ') || '-'}</strong></div>
@@ -349,6 +390,20 @@ export default function LocatorPage() {
               </details>
             )}
           </div>
+        </div>
+      )}
+
+      {enlargedFrame?.preview_url && (
+        <div className="frame-lightbox" onClick={() => setEnlargedFrame(null)}>
+          <button className="close" onClick={() => setEnlargedFrame(null)}>×</button>
+          <figure onClick={(e) => e.stopPropagation()}>
+            <img src={enlargedFrame.preview_url} alt="" />
+            <figcaption>
+              <span>{enlargedFrame.timestamp_sec.toFixed(2)}s</span>
+              <span>{enlargedFrame.detections.length} 框</span>
+              <span>{formatSeconds(enlargedFrame.elapsed_sec)}</span>
+            </figcaption>
+          </figure>
         </div>
       )}
     </div>
