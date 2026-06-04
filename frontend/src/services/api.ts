@@ -390,3 +390,9 @@ export async function downloadModelRunClips(runId: string, clipPaths: string[]):
   if (!res.ok) throw new Error((await res.json()).detail || '下载剪辑失败')
   return res.blob()
 }
+
+export async function deleteModelRun(runId: string): Promise<{ deleted: boolean; run_id: string }> {
+  const res = await fetch(`${BASE}/model-runs/${encodeURIComponent(runId)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error((await res.json()).detail || '删除模型剪辑记录失败')
+  return res.json()
+}

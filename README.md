@@ -83,6 +83,47 @@ chmod +x start.sh
 - 前端页面：http://localhost:5173
 - API 文档：http://localhost:8000/docs
 
+### 生产后台运行（nohup）
+
+如果需要让服务在 SSH 断开后继续运行，可以用 `nohup` 启动，并把进程组 PID 写入文件：
+
+```bash
+mkdir -p logs
+nohup ./start.sh > logs/app.log 2>&1 & echo $! > logs/app.pid
+```
+
+查看本次后台启动的 PID：
+
+```bash
+cat logs/app.pid
+```
+
+实时查看运行日志：
+
+```bash
+tail -f logs/app.log
+```
+
+确认前后端进程：
+
+```bash
+ps -p "$(cat logs/app.pid)" -f
+pgrep -af "uvicorn|vite"
+```
+
+停止 nohup 启动的服务：
+
+```bash
+kill "$(cat logs/app.pid)"
+```
+
+如果子进程仍存在，再确认后停止对应进程：
+
+```bash
+pkill -f "uvicorn backend.app.main:app"
+pkill -f "vite --host 0.0.0.0 --port 5173"
+```
+
 ### 手动启动
 
 ```bash

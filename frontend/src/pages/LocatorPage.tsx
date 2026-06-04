@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
+  deleteModelRun,
   downloadModelRunClips,
   getModelRun,
   listModelRuns,
@@ -24,6 +25,7 @@ export default function LocatorPage() {
   const [enlargedFrame, setEnlargedFrame] = useState<LocatorFrame | null>(null)
   const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set())
   const [downloading, setDownloading] = useState(false)
+  const [deletingRun, setDeletingRun] = useState(false)
 
   useEffect(() => {
     loadRuns()
@@ -218,6 +220,34 @@ export default function LocatorPage() {
     }
   }
 
+  async function handleDeleteRun() {
+    if (!detail || deletingRun) return
+    if (detail.status === 'queued' || detail.status === 'running') {
+      setError('任务运行中，不能删除')
+      return
+    }
+    const ok = window.confirm(`确认删除这条模型剪辑记录吗？\n${detail.source_title || detail.run_id}\n\n会同时删除该任务的结果文件、候选片段和预览图。`)
+    if (!ok) return
+    setDeletingRun(true)
+    setError('')
+    try {
+      await deleteModelRun(detail.run_id)
+      setDetail(null)
+      setSelectedRun('')
+      setSelectedClips(new Set())
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev)
+        next.delete('run')
+        return next
+      }, { replace: true })
+      await loadRuns()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除模型剪辑记录失败')
+    } finally {
+      setDeletingRun(false)
+    }
+  }
+
   function renderBehaviorCandidates(clip: LocatorClip, compact = false) {
     const candidates = topCandidates(clip)
     if (candidates.length === 0) return null
@@ -345,7 +375,35 @@ export default function LocatorPage() {
             ))}
           </select>
           <button className="btn btn-sm btn-outline" onClick={() => loadRuns()}>刷新</button>
+          {detail && (
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={handleDeleteRun}
+              disabled={deletingRun || detail.status === 'queued' || detail.status === 'running'}
+            >
+              {deletingRun ? '删除中...' : '删除记录'}
+            </button>
+          )}
+          {videoId && (
+            <button
+              className="btn btn-sm btn-outline"
+              onClick={() => {
+                setSearchParams(prev => {
+                  const next = new URLSearchParams(prev)
+                  next.delete('video')
+                  return next
+                })
+              }}
+            >
+              查看全部任务
+            </button>
+          )}
         </div>
+        {videoId && (
+          <div className="locator-filter-note">
+            当前只显示该视频关联的模型剪辑历史，点击“查看全部任务”可查看所有视频。
+          </div>
+        )}
       </div>
 
       {loading && <div className="loading"><span className="spinner" /> 加载中...</div>}

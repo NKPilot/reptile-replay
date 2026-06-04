@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ..services.model_run_processor import (
     build_model_run_clips_zip,
     create_model_run,
+    delete_model_run,
     execute_model_run,
     list_model_runs,
     load_model_run_detail,
@@ -74,3 +75,14 @@ async def download_run_clips(run_id: str, body: DownloadClipsRequest):
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.delete("/{run_id}")
+async def delete_run(run_id: str):
+    try:
+        deleted = delete_model_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not deleted:
+        raise HTTPException(404, "模型剪辑任务不存在")
+    return {"deleted": True, "run_id": run_id}

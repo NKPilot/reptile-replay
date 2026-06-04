@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   listClips, listSources, listHistory, getHistoryDetail,
   type ClipItem, type SourceItem, type HistoryRecord,
@@ -352,8 +353,9 @@ export default function ClipsPage() {
             <div className="icon">📭</div>
             <p>暂无剪辑历史记录</p>
             <p style={{ fontSize: '0.85rem', marginTop: '8px' }}>
-              运行 pipeline 后将自动保存历史
+              这里显示旧 pipeline 历史；模型剪辑历史请到模型检测页查看
             </p>
+            <Link className="btn btn-sm btn-outline empty-action" to="/locator">查看模型剪辑历史</Link>
           </div>
         ) : (
           <div className="history-list">

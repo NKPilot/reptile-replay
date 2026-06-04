@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import time
 import uuid
@@ -401,6 +402,43 @@ def build_model_run_clips_zip(run_id: str, clip_paths: list[str]) -> tuple[str, 
 
     filename = f"{Path(run_id).name}_clips.zip"
     return filename, buffer.getvalue()
+
+
+def delete_model_run(run_id: str) -> bool:
+    record = get_model_run(run_id)
+    if not record:
+        return False
+    if record.get("status") in {"queued", "running"}:
+        raise ValueError("任务运行中，不能删除")
+
+    safe_run_id = Path(run_id).name
+    paths = [
+        _run_path(safe_run_id),
+        _project_path(record.get("result_path")),
+        RESULTS_DIR / f"{safe_run_id}_clips",
+        RESULTS_DIR / f"{safe_run_id}_preview",
+    ]
+    for path in paths:
+        if not path or not _is_safe_delete_path(path):
+            continue
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+    return True
+
+
+def _is_safe_delete_path(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(MODEL_RUNS_DIR.resolve())
+        return True
+    except ValueError:
+        pass
+    try:
+        path.resolve().relative_to(RESULTS_DIR.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def _project_path(value: str | None) -> Path | None:

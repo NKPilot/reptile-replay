@@ -94,6 +94,7 @@ body {
 .btn-danger { background: var(--danger); }
 .btn-danger:hover { opacity: 0.85; }
 .btn-warn { background: var(--warn); color: #000; }
+.empty-action { margin-top: 14px; }
 
 /* Detail page */
 .video-detail { padding: 0 0 40px; }
@@ -485,6 +486,9 @@ body {
 /* ========== Locator Results ========== */
 .locator-page { padding: 0 0 40px; }
 .locator-toolbar select { min-width: 260px; }
+.locator-filter-note {
+  margin-top: 8px; color: var(--text-dim); font-size: 0.82rem;
+}
 
 .locator-summary {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
