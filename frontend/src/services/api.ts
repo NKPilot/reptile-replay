@@ -377,3 +377,13 @@ export async function getModelRun(runId: string): Promise<ModelRunDetail> {
   if (!res.ok) throw new Error((await res.json()).detail || '加载模型剪辑结果失败')
   return res.json()
 }
+
+export async function downloadModelRunClips(runId: string, clipPaths: string[]): Promise<Blob> {
+  const res = await fetch(`${BASE}/model-runs/${encodeURIComponent(runId)}/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clip_paths: clipPaths }),
+  })
+  if (!res.ok) throw new Error((await res.json()).detail || '下载剪辑失败')
+  return res.blob()
+}

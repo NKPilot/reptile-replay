@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ..services.model_run_processor import (
+    build_model_run_clips_zip,
     create_model_run,
     execute_model_run,
     list_model_runs,
@@ -20,6 +22,10 @@ router = APIRouter(prefix="/api/model-runs", tags=["model-runs"])
 class CreateModelRunRequest(BaseModel):
     video_id: Optional[str] = None
     source_video_id: Optional[str] = None
+
+
+class DownloadClipsRequest(BaseModel):
+    clip_paths: list[str]
 
 
 @router.post("")
@@ -51,3 +57,20 @@ async def get_run(run_id: str):
     if not detail:
         raise HTTPException(404, "模型剪辑任务不存在")
     return detail
+
+
+@router.post("/{run_id}/download")
+async def download_run_clips(run_id: str, body: DownloadClipsRequest):
+    try:
+        archive = build_model_run_clips_zip(run_id, body.clip_paths)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not archive:
+        raise HTTPException(404, "模型剪辑任务不存在")
+
+    filename, content = archive
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

@@ -6,8 +6,10 @@ import json
 import subprocess
 import time
 import uuid
+import zipfile
 from collections import Counter
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -328,6 +330,67 @@ def load_model_run_detail(run_id: str) -> dict[str, Any] | None:
 
     detail["clips"] = [_normalize_clip(apply_final_label(clip)) for clip in clips]
     return detail
+
+
+def build_model_run_clips_zip(run_id: str, clip_paths: list[str]) -> tuple[str, bytes] | None:
+    detail = load_model_run_detail(run_id)
+    if not detail:
+        return None
+
+    requested = {str(path) for path in clip_paths if str(path)}
+    if not requested:
+        raise ValueError("请选择要下载的片段")
+
+    available: dict[str, dict[str, Any]] = {
+        str(clip.get("clip_path")): clip
+        for clip in detail.get("clips", [])
+        if isinstance(clip, dict) and clip.get("clip_path")
+    }
+    missing = requested - set(available)
+    if missing:
+        raise ValueError("存在不属于该任务的片段")
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        used_names: set[str] = set()
+        for clip_path in clip_paths:
+            clip = available[str(clip_path)]
+            path = _project_path(clip.get("clip_path"))
+            if not path or not path.exists() or not path.is_file():
+                continue
+
+            label = str(clip.get("final_label") or clip.get("auto_label") or "clip")
+            stem = path.stem
+            suffix = path.suffix or ".mp4"
+            name = f"{label}/{stem}{suffix}"
+            if name in used_names:
+                name = f"{label}/{stem}_{len(used_names) + 1}{suffix}"
+            used_names.add(name)
+            archive.write(path, arcname=name)
+
+    if not used_names:
+        raise ValueError("没有可下载的片段文件")
+
+    filename = f"{Path(run_id).name}_clips.zip"
+    return filename, buffer.getvalue()
+
+
+def _project_path(value: str | None) -> Path | None:
+    if not value:
+        return None
+    path = Path(value)
+    if path.is_absolute():
+        try:
+            path.relative_to(PROJECT_ROOT)
+        except ValueError:
+            return None
+        return path
+    resolved = (PROJECT_ROOT / path).resolve()
+    try:
+        resolved.relative_to(PROJECT_ROOT)
+    except ValueError:
+        return None
+    return resolved
 
 
 def _static_url_for_project_path(value: str | None) -> str | None:
