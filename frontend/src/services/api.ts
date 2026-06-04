@@ -210,3 +210,73 @@ export async function getHistoryDetail(runId: string): Promise<HistoryDetail> {
   const res = await fetch(`${BASE}/clips/history/${runId}`)
   return res.json()
 }
+
+// ========== Locator API ==========
+
+export interface LocatorRunSummary {
+  run_id: string
+  filename: string
+  created_at: string
+  model_dir: string
+  backend: string
+  device: string
+  dtype: string
+  prompts: string[]
+  sample_frames: number
+  elapsed_sec: number
+  clip_count: number
+  detected_clip_count: number
+}
+
+export interface LocatorDetection {
+  label?: string
+  score?: number | null
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+export interface LocatorFrame {
+  frame_index: number
+  timestamp_sec: number
+  elapsed_sec: number
+  preview: string | null
+  preview_url: string | null
+  detections: LocatorDetection[]
+  raw_answer?: string | null
+}
+
+export interface LocatorClip {
+  clip_path: string
+  clip_url: string | null
+  video_meta: {
+    total_frames?: number
+    fps?: number
+    duration_sec?: number
+    error?: string
+  }
+  elapsed_sec: number
+  sampled_frames: number
+  detected_frames: number
+  total_detections: number
+  has_reptile: boolean
+  labels: string[]
+  frames: LocatorFrame[]
+}
+
+export interface LocatorRunDetail extends LocatorRunSummary {
+  clips: LocatorClip[]
+}
+
+export async function listLocatorRuns(): Promise<{ runs: LocatorRunSummary[] }> {
+  const res = await fetch(`${BASE}/locator/runs`)
+  if (!res.ok) throw new Error('加载模型检测记录失败')
+  return res.json()
+}
+
+export async function getLocatorRun(runId: string): Promise<LocatorRunDetail> {
+  const res = await fetch(`${BASE}/locator/runs/${encodeURIComponent(runId)}`)
+  if (!res.ok) throw new Error((await res.json()).detail || '加载模型检测结果失败')
+  return res.json()
+}

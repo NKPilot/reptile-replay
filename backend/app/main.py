@@ -19,7 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # 确保 ffmpeg/yt-dlp 在 PATH 中
 os.environ["PATH"] = os.path.expanduser("~/.local/bin") + ":" + os.environ.get("PATH", "")
 
-from app.api import videos, events, clips
+from app.api import videos, events, clips, locator
 from app.services.video_processor import init_storage
 
 app = FastAPI(
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(videos.router)
 app.include_router(events.router)
 app.include_router(clips.router)
+app.include_router(locator.router)
 
 # 静态文件服务（剪辑片段）
 events_dir = PROJECT_ROOT / "data" / "events"
@@ -56,6 +57,11 @@ app.mount("/static/uploads", StaticFiles(directory=str(uploads_dir)), name="stat
 clips_dir = PROJECT_ROOT / "data" / "clips"
 clips_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static/clips", StaticFiles(directory=str(clips_dir)), name="static_clips")
+
+# 模型检测结果预览图
+results_dir = PROJECT_ROOT / "data" / "results"
+results_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static/results", StaticFiles(directory=str(results_dir)), name="static_results")
 
 
 @app.on_event("startup")

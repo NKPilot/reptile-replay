@@ -475,3 +475,127 @@ body {
 }
 .stat-usable { background: #052e16; color: #4ade80; }
 .stat-unknown { background: #422006; color: #f59e0b; }
+
+/* ========== Locator Results ========== */
+.locator-page { padding: 0 0 40px; }
+.locator-toolbar select { min-width: 260px; }
+
+.locator-summary {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 10px;
+}
+.locator-summary > div {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+}
+.locator-summary span {
+  display: block; color: var(--text-dim); font-size: 0.76rem; margin-bottom: 2px;
+}
+.locator-summary strong { font-size: 1.15rem; font-weight: 700; }
+
+.locator-run-meta {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  color: var(--text-dim); font-size: 0.78rem; margin-bottom: 18px;
+}
+.locator-run-meta span {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 8px; max-width: 360px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.locator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.locator-clip {
+  display: block; width: 100%; text-align: left; color: var(--text);
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; cursor: pointer;
+  transition: transform .15s, border-color .15s, background .15s;
+}
+.locator-clip:hover {
+  transform: translateY(-2px); border-color: #444; background: var(--bg-hover);
+}
+.locator-clip.locator-hit { border-left: 3px solid var(--accent); }
+.locator-clip.locator-miss { border-left: 3px solid var(--text-dim); }
+
+.locator-thumb {
+  height: 160px; background: #111; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); overflow: hidden;
+}
+.locator-thumb img,
+.locator-thumb video {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.locator-clip-body { padding: 10px 12px 12px; }
+.locator-clip-name {
+  font-family: monospace; font-size: 0.78rem; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 8px;
+}
+.locator-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.locator-badge {
+  font-size: 0.72rem; padding: 1px 6px; border-radius: 3px;
+  font-weight: 600; background: #27272a; color: #d4d4d8;
+}
+.locator-badge-hit { background: #052e16; color: #4ade80; }
+.locator-badge-miss { background: #3f3f46; color: #a1a1aa; }
+.locator-clip-meta {
+  display: flex; gap: 10px; margin-top: 8px;
+  color: var(--text-dim); font-size: 0.72rem;
+  overflow: hidden;
+}
+.locator-clip-meta span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.locator-preview-panel {
+  background: var(--bg-card); border-radius: var(--radius);
+  max-width: 980px; width: 95vw; max-height: 90vh; overflow-y: auto;
+  padding: 18px;
+}
+.locator-preview-panel video { border-radius: 8px; margin-bottom: 14px; }
+.locator-preview-head {
+  display: flex; justify-content: space-between; gap: 12px; align-items: flex-start;
+  margin-bottom: 14px;
+}
+.locator-preview-head h3 {
+  font-size: 1rem; word-break: break-all; min-width: 0;
+}
+.locator-frame-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.locator-frame {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.locator-frame img,
+.locator-frame-empty {
+  width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+}
+.locator-frame-empty {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); background: #111;
+}
+.locator-frame-meta {
+  display: flex; justify-content: space-between; gap: 8px;
+  color: var(--text-dim); font-size: 0.72rem; padding: 6px 8px;
+}
+.locator-raw {
+  margin-top: 14px; color: var(--text-dim); font-size: 0.82rem;
+}
+.locator-raw summary { cursor: pointer; margin-bottom: 8px; }
+.locator-raw pre {
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px; margin-bottom: 8px;
+}
+
+@media (max-width: 720px) {
+  .app-header { flex-wrap: wrap; align-items: center; }
+  .app-nav { width: 100%; margin-left: 0; overflow-x: auto; }
+  .locator-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .locator-toolbar select { min-width: 100%; }
+  .locator-preview-head { flex-direction: column; }
+}
