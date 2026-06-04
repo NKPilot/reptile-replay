@@ -5,6 +5,8 @@ import {
   uploadVideo,
   listVideos,
   listSources,
+  listModelRuns,
+  type ModelRunSummary,
   type VideoInfo,
   type SourceItem,
 } from '../services/api'
@@ -12,6 +14,7 @@ import {
 export default function UploadPage() {
   const [videos, setVideos] = useState<VideoInfo[]>([])
   const [sources, setSources] = useState<SourceItem[]>([])
+  const [modelRuns, setModelRuns] = useState<ModelRunSummary[]>([])
   const [uploading, setUploading] = useState(false)
   const [importing, setImporting] = useState<string>('') // 正在导入的素材名
   const [modelSource, setModelSource] = useState('')
@@ -25,7 +28,17 @@ export default function UploadPage() {
   useEffect(() => {
     loadVideos()
     loadSources()
+    loadModelRuns()
   }, [])
+
+  useEffect(() => {
+    if (!modelRuns.some(run => run.status === 'queued' || run.status === 'running')) return
+    const timer = window.setInterval(() => {
+      loadVideos()
+      loadModelRuns()
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [modelRuns])
 
   async function loadVideos() {
     try {
@@ -45,6 +58,15 @@ export default function UploadPage() {
     }
   }
 
+  async function loadModelRuns() {
+    try {
+      const data = await listModelRuns()
+      setModelRuns(data.runs)
+    } catch {
+      // 静默
+    }
+  }
+
   async function handleFile(file: File) {
     if (!file.name.match(/\.(mp4|mov|avi|mkv|webm)$/i)) {
       setError('请上传 mp4/mov/avi/mkv/webm 格式的视频')
@@ -56,6 +78,7 @@ export default function UploadPage() {
       const result = await uploadVideo(file)
       await loadVideos()
       const run = await createModelRun({ video_id: result.video_id })
+      await loadModelRuns()
       navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
     } catch (e: any) {
       setError(e.message || '上传或模型剪辑失败')
@@ -72,6 +95,7 @@ export default function UploadPage() {
     try {
       const run = await createModelRun({ source_video_id: sourceId })
       await loadVideos()
+      await loadModelRuns()
       navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
     } catch (e: any) {
       setError(e.message || '素材模型剪辑失败')
@@ -86,6 +110,7 @@ export default function UploadPage() {
     setModelSource(sourceId)
     try {
       const run = await createModelRun({ source_video_id: sourceId })
+      await loadModelRuns()
       navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
     } catch (e: any) {
       setError(e.message || `创建「${src?.title || sourceId}」模型剪辑任务失败`)
@@ -99,12 +124,22 @@ export default function UploadPage() {
     setModelVideo(videoId)
     try {
       const run = await createModelRun({ video_id: videoId })
+      await loadModelRuns()
       navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
     } catch (e: any) {
       setError(e.message || '创建模型剪辑任务失败')
     } finally {
       setModelVideo('')
     }
+  }
+
+  async function handleVideoCardClick(video: VideoInfo) {
+    const run = latestRunFor(video.video_id)
+    if (run) {
+      navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)
+      return
+    }
+    await handleUploadedModelRun(video.video_id)
   }
 
   function onDrop(e: React.DragEvent) {
@@ -124,6 +159,37 @@ export default function UploadPage() {
   function formatSize(bytes: number) {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  function latestRunFor(videoId: string) {
+    return modelRuns.find(run => run.video_id === videoId)
+  }
+
+  function statusClass(video: VideoInfo, run?: ModelRunSummary) {
+    if (run?.status === 'queued' || run?.status === 'running') return 'processing'
+    if (run?.status === 'done') return 'done'
+    if (run?.status === 'failed') return 'failed'
+    return video.status
+  }
+
+  function statusText(video: VideoInfo, run?: ModelRunSummary) {
+    if (run?.status === 'queued') return '排队中'
+    if (run?.status === 'running') return '模型剪辑中'
+    if (run?.status === 'done') return '已剪辑'
+    if (run?.status === 'failed') return '剪辑失败'
+    return video.status === 'uploaded' ? '待处理' :
+      video.status === 'processing' ? '处理中' :
+      video.status === 'done' ? '已完成' :
+      video.status === 'failed' ? '失败' : video.status
+  }
+
+  function actionText(video: VideoInfo) {
+    if (modelVideo === video.video_id) return '创建中...'
+    const run = latestRunFor(video.video_id)
+    if (run?.status === 'done') return `${run.visible_clip_count}/${run.clip_count} 片段 · 查看结果 →`
+    if (run?.status === 'queued' || run?.status === 'running') return '查看进度 →'
+    if (run?.status === 'failed') return '查看失败详情 →'
+    return '模型剪辑 →'
   }
 
   return (
@@ -182,23 +248,23 @@ export default function UploadPage() {
       {videos.length > 0 && (
         <div className="video-list">
           <h3>已上传的视频 ({videos.length})</h3>
-          {videos.map((v) => (
-            <div key={v.video_id} className="video-card"
-                 onClick={() => handleUploadedModelRun(v.video_id)}
-                 style={{ cursor: 'pointer' }}>
-              <span className="name">{v.original_name}</span>
-              <span className="size">{formatSize(v.file_size)}</span>
-              <span className={`status ${v.status}`}>
-                {v.status === 'uploaded' ? '待处理' :
-                 v.status === 'processing' ? '处理中' :
-                 v.status === 'done' ? '已完成' :
-                 v.status === 'failed' ? '失败' : v.status}
-              </span>
-              <span style={{ color: 'var(--text-dim)' }}>
-                {modelVideo === v.video_id ? '创建中...' : '模型剪辑 →'}
-              </span>
-            </div>
-          ))}
+          {videos.map((v) => {
+            const run = latestRunFor(v.video_id)
+            return (
+              <div key={v.video_id} className="video-card"
+                   onClick={() => handleVideoCardClick(v)}
+                   style={{ cursor: 'pointer' }}>
+                <span className="name">{v.original_name}</span>
+                <span className="size">{formatSize(v.file_size)}</span>
+                <span className={`status ${statusClass(v, run)}`}>
+                  {statusText(v, run)}
+                </span>
+                <span className="video-action">
+                  {actionText(v)}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
 

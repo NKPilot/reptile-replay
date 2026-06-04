@@ -82,6 +82,8 @@ def create_model_run(video_id: str | None = None, source_video_id: str | None = 
     video = get_video(video_id or "")
     if not video:
         raise FileNotFoundError(f"视频不存在: {video_id}")
+    video["status"] = "processing"
+    video["error"] = None
 
     run_id = f"model_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     record = {
@@ -205,8 +207,17 @@ def execute_model_run(run_id: str):
                 "duration_seconds": round(time.perf_counter() - started, 1),
             }
         )
+        video["status"] = "done"
+        video["error"] = None
+        video["model_run_id"] = run_id
+        video["model_clip_count"] = len(visible)
         _write_run(record)
     except Exception as exc:
+        video = get_video(str(record.get("video_id", "")))
+        if video:
+            video["status"] = "failed"
+            video["error"] = str(exc)
+            video["model_run_id"] = run_id
         record.update(
             {
                 "status": "failed",

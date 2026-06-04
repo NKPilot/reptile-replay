@@ -74,6 +74,9 @@ body {
 .video-card .status.processing { background: #422006; color: #f59e0b; }
 .video-card .status.done { background: #052e16; color: #4ade80; }
 .video-card .status.failed { background: #450a0a; color: #ef4444; }
+.video-card .video-action {
+  color: var(--text-dim); font-size: 0.82rem; flex: 0 0 auto; margin-left: 12px;
+}
 
 /* Buttons */
 .btn {

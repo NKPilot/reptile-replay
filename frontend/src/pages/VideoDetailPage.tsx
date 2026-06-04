@@ -22,6 +22,12 @@ export default function VideoDetailPage() {
     loadVideo()
   }, [videoId])
 
+  useEffect(() => {
+    if (!modelRuns.some(run => run.status === 'queued' || run.status === 'running')) return
+    const timer = window.setInterval(loadVideo, 3000)
+    return () => window.clearInterval(timer)
+  }, [modelRuns, videoId])
+
   async function loadVideo() {
     try {
       const v = await getVideo(videoId!)
@@ -49,6 +55,35 @@ export default function VideoDetailPage() {
     }
   }
 
+  const latestRun = modelRuns[0]
+
+  function statusClass() {
+    if (latestRun?.status === 'queued' || latestRun?.status === 'running') return 'processing'
+    if (latestRun?.status === 'done') return 'done'
+    if (latestRun?.status === 'failed') return 'failed'
+    return video?.status || 'uploaded'
+  }
+
+  function statusText() {
+    if (latestRun?.status === 'queued') return '排队中'
+    if (latestRun?.status === 'running') return '模型剪辑中'
+    if (latestRun?.status === 'done') return '已剪辑'
+    if (latestRun?.status === 'failed') return '剪辑失败'
+    if (!video) return '-'
+    return video.status === 'uploaded' ? '待处理' :
+      video.status === 'processing' ? '处理中...' :
+      video.status === 'done' ? '已完成' :
+      video.status === 'failed' ? '失败' : video.status
+  }
+
+  function runStatusText(run: ModelRunSummary) {
+    if (run.status === 'done') return `${run.visible_clip_count}/${run.clip_count}`
+    if (run.status === 'queued') return '排队中'
+    if (run.status === 'running') return '运行中'
+    if (run.status === 'failed') return '失败'
+    return run.status
+  }
+
   if (loading) return <div className="loading"><span className="spinner" /> 加载中...</div>
   if (error) return <div className="empty-state"><div className="icon">⚠️</div><p>{error}</p><Link to="/" className="btn btn-outline" style={{marginTop:16}}>返回首页</Link></div>
   if (!video) return null
@@ -59,11 +94,8 @@ export default function VideoDetailPage() {
 
       <div className="video-info-bar">
         <h2>{video.original_name}</h2>
-        <span className={`status ${video.status}`}>
-          {video.status === 'uploaded' ? '待处理' :
-           video.status === 'processing' ? '处理中...' :
-           video.status === 'done' ? '已完成' :
-           video.status === 'failed' ? '失败' : video.status}
+        <span className={`status ${statusClass()}`}>
+          {statusText()}
         </span>
 
         <button className="btn btn-primary btn-sm" onClick={handleModelRun} disabled={modelRunning}>
@@ -80,7 +112,7 @@ export default function VideoDetailPage() {
               className="btn btn-sm btn-outline"
               onClick={() => navigate(`/locator?video=${encodeURIComponent(run.video_id)}&run=${encodeURIComponent(run.run_id)}`)}
             >
-              {run.status === 'done' ? `${run.visible_clip_count}/${run.clip_count}` : run.status}
+              {runStatusText(run)}
             </button>
           ))}
         </div>
