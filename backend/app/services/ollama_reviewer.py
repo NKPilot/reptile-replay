@@ -18,10 +18,6 @@ LABELS = {
     "feeding_or_strike": "疑似进食/捕食",
     "shedding": "疑似蜕皮",
     "contact_mating_like": "疑似接触/交配",
-    "drinking": "疑似饮水",
-    "moving": "移动/探索",
-    "resting": "静止/休息",
-    "interaction": "外部互动",
     "unknown": "不确定",
 }
 ALLOWED_LABELS = set(LABELS)
@@ -175,7 +171,8 @@ def _review_prompt(clip: dict[str, Any]) -> str:
         "只允许输出 JSON，字段为 has_reptile(boolean), behavior(string), "
         "confidence(number 0-1), reason(string)。"
         f"behavior 只能是这些枚举之一: {labels}。"
-        "如果不能确定具体行为，behavior 用 unknown。"
+        "普通移动、爬行、探索、静止、喝水、人手互动都不算目标行为，behavior 用 unknown。"
+        "如果不能确定具体行为，behavior 也用 unknown。"
         "重点区分: shed skin/白色脱落皮贴近身体 => shedding；"
         "猎物/食物被咬住或攻击动作 => feeding_or_strike；"
         "两只爬宠身体缠绕或持续接触 => contact_mating_like。"

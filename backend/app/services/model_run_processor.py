@@ -24,6 +24,7 @@ DEFAULT_MODEL_DIR = PROJECT_ROOT / "models" / "locateanything-3b"
 SEGMENT_SECONDS = 3
 SEGMENT_WIDTH = 640
 SEGMENT_FPS = 8
+VISIBLE_BEHAVIOR_LABELS = {"feeding_or_strike", "shedding", "contact_mating_like"}
 
 
 def init_model_run_storage():
@@ -261,7 +262,7 @@ def _visible_clips(clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
     visible = [
         clip
         for clip in clips
-        if clip.get("has_reptile") and _clip_display_label(clip) != "unknown"
+        if clip.get("has_reptile") and _clip_display_label(clip) in VISIBLE_BEHAVIOR_LABELS
     ]
     return sorted(visible, key=_clip_display_confidence, reverse=True)
 

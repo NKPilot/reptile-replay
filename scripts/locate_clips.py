@@ -57,6 +57,8 @@ FOOD_LABELS = {"food", "prey", "insect", "mouse", "worm"}
 SHED_LABELS = {"shed skin", "skin", "shedding skin"}
 WATER_LABELS = {"water bowl", "water", "bowl"}
 HUMAN_LABELS = {"human hand", "hand", "person", "human"}
+TARGET_BEHAVIOR_LABELS = ("feeding_or_strike", "shedding", "contact_mating_like")
+MIN_TARGET_BEHAVIOR_CONFIDENCE = 0.45
 
 BEHAVIOR_LABEL_CN = {
     "feeding_or_strike": "疑似进食/捕食",
@@ -667,7 +669,12 @@ def behavior_candidates(
         elif not near_shed:
             scores["shedding"] = min(scores["shedding"], 0.62)
 
-    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:3]
+    target_scores = {label: scores[label] for label in TARGET_BEHAVIOR_LABELS}
+    ranked = sorted(target_scores.items(), key=lambda item: item[1], reverse=True)
+    if detected_frames == 0 or ranked[0][1] < MIN_TARGET_BEHAVIOR_CONFIDENCE:
+        ranked = [("unknown", max(scores.get("unknown", 0.35), 0.35))]
+    else:
+        ranked = ranked[:3]
     candidates = [
         {
             "label": label,
