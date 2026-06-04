@@ -15,3 +15,15 @@ dependencies = [
 
 [dependency-groups]
 dev = []
+model-download = [
+    "modelscope>=1.20.0",
+]
+locateanything = [
+    "accelerate>=0.34.0,<2",
+    "decord>=0.6.0",
+    "modelscope>=1.20.0",
+    "pillow>=10.0.0",
+    "tokenizers==0.22.0",
+    "torch>=2.1.0,<2.6",
+    "transformers==4.57.1",
+]

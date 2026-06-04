@@ -18,8 +18,8 @@ LocateAnything-3B 模型下载脚本 —— 从 ModelScope 下载 NVIDIA 视觉�
     → 结合运动检测，只在爬宠区域分析运动，降低误报
     → 区分不同爬宠个体（如多条蛇）
 
-依赖 (独立安装，不进入项目主依赖):
-    pip install modelscope
+依赖 (uv 可选依赖组，不进入项目主依赖):
+    uv sync --group model-download
 
 用法:
     # 预览
@@ -50,7 +50,8 @@ def check_modelscope() -> bool:
     """检查 modelscope SDK 是否可用。"""
     if importlib.util.find_spec("modelscope") is None:
         print("❌ 需要 modelscope SDK")
-        print("   请运行: pip install modelscope")
+        print("   请运行: uv sync --group model-download")
+        print("   然后使用: uv run --group model-download python scripts/download_locateanything.py")
         return False
     return True
 
