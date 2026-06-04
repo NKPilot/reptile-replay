@@ -455,6 +455,17 @@ def has_near_object(
     return False
 
 
+def object_frame_ratio(frame_results: list[dict[str, Any]], object_group: str) -> float:
+    if not frame_results:
+        return 0.0
+    hits = sum(
+        1
+        for frame in frame_results
+        if any(detection_group(det) == object_group for det in frame["detections"])
+    )
+    return hits / len(frame_results)
+
+
 def count_multi_reptile_frames(frame_results: list[dict[str, Any]]) -> int:
     return sum(
         1
@@ -590,6 +601,8 @@ def behavior_candidates(
     near_shed = has_near_object(frame_results, "shed", max_distance=2.4)
     near_water = has_near_object(frame_results, "water")
     near_human = has_near_object(frame_results, "human", max_distance=2.2)
+    food_frame_ratio = object_frame_ratio(frame_results, "food")
+    shed_frame_ratio = object_frame_ratio(frame_results, "shed")
     multi_reptile_ratio = count_multi_reptile_frames(frame_results) / sampled_frames
     near_reptile_pair = has_near_reptile_pair(frame_results)
     objects = sorted({detection_group(det) for frame in frame_results for det in frame["detections"]})
@@ -610,14 +623,15 @@ def behavior_candidates(
     }
 
     if near_food:
-        scores["feeding_or_strike"] += 0.28
-        scores["shedding"] -= 0.18
+        scores["feeding_or_strike"] += 0.22 + min(food_frame_ratio, 1.0) * 0.08
+        if not near_shed:
+            scores["shedding"] -= 0.16
     if near_shed:
-        shed_bonus = 0.26
+        shed_bonus = 0.36 + min(shed_frame_ratio, 1.0) * 0.18
         if peak_motion >= 0.06:
-            shed_bonus -= 0.12
-        if near_food:
-            shed_bonus -= 0.10
+            shed_bonus -= 0.06
+        if near_food and food_frame_ratio > shed_frame_ratio:
+            shed_bonus -= 0.08
         scores["shedding"] += max(0.0, shed_bonus)
     if near_water:
         scores["drinking"] += 0.30
@@ -642,7 +656,11 @@ def behavior_candidates(
         scores = {"unknown": 0.35}
     else:
         scores["unknown"] = max(0.05, 0.32 - continuity * 0.18)
-        if near_food and peak_motion >= 0.06:
+        if near_shed and shed_frame_ratio > 0:
+            scores["shedding"] = max(scores["shedding"], 0.74 + min(shed_frame_ratio, 1.0) * 0.14)
+            if near_food and food_frame_ratio <= shed_frame_ratio:
+                scores["feeding_or_strike"] = min(scores["feeding_or_strike"], scores["shedding"] - 0.04)
+        elif near_food and peak_motion >= 0.06:
             scores["shedding"] = min(scores["shedding"], scores["feeding_or_strike"] - 0.05)
         elif peak_motion >= 0.075:
             scores["shedding"] = min(scores["shedding"], 0.68)
@@ -662,6 +680,8 @@ def behavior_candidates(
         **motion,
         "reptile_continuity": round(continuity, 4),
         "longest_reptile_segment_ratio": round(longest_ratio, 4),
+        "food_frame_ratio": round(food_frame_ratio, 4),
+        "shed_frame_ratio": round(shed_frame_ratio, 4),
         "multi_reptile_frame_ratio": round(multi_reptile_ratio, 4),
         "near_reptile_pair": near_reptile_pair,
         "reptile_segments": segments,
