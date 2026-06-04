@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
+  downloadModelRunClips,
   getModelRun,
   listModelRuns,
   type LocatorClip,
@@ -21,6 +22,8 @@ export default function LocatorPage() {
   const [error, setError] = useState('')
   const [preview, setPreview] = useState<LocatorClip | null>(null)
   const [enlargedFrame, setEnlargedFrame] = useState<LocatorFrame | null>(null)
+  const [selectedClips, setSelectedClips] = useState<Set<string>>(new Set())
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     loadRuns()
@@ -38,6 +41,10 @@ export default function LocatorPage() {
     }, 3000)
     return () => window.clearInterval(timer)
   }, [detail?.run_id, detail?.status])
+
+  useEffect(() => {
+    setSelectedClips(new Set())
+  }, [detail?.run_id])
 
   async function loadRuns(silent = false) {
     if (!silent) setLoading(true)
@@ -89,6 +96,11 @@ export default function LocatorPage() {
       return b.detected_frames - a.detected_frames
     })
   }, [detail])
+
+  const selectedClipPaths = useMemo(() => {
+    const available = new Set(clips.map(clip => clip.clip_path))
+    return Array.from(selectedClips).filter(path => available.has(path))
+  }, [clips, selectedClips])
 
   function formatDateTime(iso: string) {
     if (!iso) return '未知时间'
@@ -148,6 +160,15 @@ export default function LocatorPage() {
     return map[status || ''] || status || '-'
   }
 
+  function progressPercent(run?: ModelRunDetail | ModelRunSummary | null) {
+    const value = run?.progress_percent
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.min(100, Math.round(value)))
+    }
+    if (run?.status === 'done' || run?.status === 'failed') return 100
+    return 0
+  }
+
   function closePreview() {
     setPreview(null)
     setEnlargedFrame(null)
@@ -161,6 +182,40 @@ export default function LocatorPage() {
 
   function topCandidates(clip: LocatorClip) {
     return (clip.behavior_candidates || []).slice(0, 3)
+  }
+
+  function toggleClip(path: string) {
+    setSelectedClips(prev => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
+
+  function selectAllClips() {
+    setSelectedClips(new Set(clips.map(clip => clip.clip_path)))
+  }
+
+  async function handleDownloadSelected() {
+    if (!detail || selectedClipPaths.length === 0 || downloading) return
+    setDownloading(true)
+    setError('')
+    try {
+      const blob = await downloadModelRunClips(detail.run_id, selectedClipPaths)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${detail.run_id}_clips.zip`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '下载剪辑失败')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   function renderBehaviorCandidates(clip: LocatorClip, compact = false) {
@@ -204,12 +259,29 @@ export default function LocatorPage() {
 
   function renderClip(clip: LocatorClip) {
     const previewUrl = bestPreview(clip.frames)
+    const selected = selectedClips.has(clip.clip_path)
     return (
-      <button
+      <div
         key={clip.clip_path}
-        className={`locator-clip ${clip.has_reptile ? 'locator-hit' : 'locator-miss'}`}
+        className={`locator-clip ${clip.has_reptile ? 'locator-hit' : 'locator-miss'} ${selected ? 'locator-selected' : ''}`}
+        role="button"
+        tabIndex={0}
         onClick={() => setPreview(clip)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setPreview(clip)
+          }
+        }}
       >
+        <label className="locator-select" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => toggleClip(clip.clip_path)}
+          />
+          <span>选择</span>
+        </label>
         <div className="locator-thumb">
           {previewUrl ? (
             <img src={previewUrl} alt="" loading="lazy" />
@@ -241,7 +313,7 @@ export default function LocatorPage() {
             {clip.labels.length > 0 ? <span>{clip.labels.join(', ')}</span> : null}
           </div>
         </div>
-      </button>
+      </div>
     )
   }
 
@@ -320,16 +392,40 @@ export default function LocatorPage() {
             {detail.error ? <span>{detail.error}</span> : null}
           </div>
 
+          <div className="locator-progress">
+            <div className="locator-progress-head">
+              <span>{detail.progress_message || statusText(detail.status)}</span>
+              <strong>{progressPercent(detail)}%</strong>
+            </div>
+            <div className="locator-progress-track" aria-label="模型剪辑进度">
+              <div style={{ width: `${progressPercent(detail)}%` }} />
+            </div>
+          </div>
+
           {detail.status === 'queued' || detail.status === 'running' ? (
-            <div className="loading"><span className="spinner" /> {statusText(detail.status)}，结果会自动刷新...</div>
+            <div className="loading"><span className="spinner" /> {detail.progress_message || statusText(detail.status)}，结果会自动刷新...</div>
           ) : detail.status === 'failed' ? (
             <div className="empty-state"><p>{detail.error || '模型剪辑失败'}</p></div>
           ) : clips.length === 0 ? (
             <div className="empty-state"><p>没有剪辑出有爬宠且带具体行为的片段</p></div>
           ) : (
-            <div className="locator-grid">
-              {clips.map(renderClip)}
-            </div>
+            <>
+              <div className="locator-bulkbar">
+                <span>已选 {selectedClipPaths.length} / {clips.length}</span>
+                <button className="btn btn-sm btn-outline" onClick={selectAllClips}>
+                  全选当前结果
+                </button>
+                <button className="btn btn-sm btn-outline" onClick={() => setSelectedClips(new Set())} disabled={selectedClipPaths.length === 0}>
+                  清空
+                </button>
+                <button className="btn btn-sm btn-primary" onClick={handleDownloadSelected} disabled={selectedClipPaths.length === 0 || downloading}>
+                  {downloading ? '打包中...' : '批量下载'}
+                </button>
+              </div>
+              <div className="locator-grid">
+                {clips.map(renderClip)}
+              </div>
+            </>
           )}
         </>
       )}

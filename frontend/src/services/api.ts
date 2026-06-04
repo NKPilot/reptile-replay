@@ -339,6 +339,9 @@ export interface ModelRunSummary {
   started_at: string
   finished_at: string
   error: string
+  progress_percent?: number
+  progress_stage?: string
+  progress_message?: string
   clip_count: number
   visible_clip_count: number
   behavior_distribution: Record<string, number>

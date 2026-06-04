@@ -508,6 +508,37 @@ body {
   border-radius: 4px; padding: 3px 8px; max-width: 360px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.locator-progress {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 14px;
+}
+.locator-progress-head {
+  display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  color: var(--text-dim); font-size: 0.82rem; margin-bottom: 8px;
+}
+.locator-progress-head span {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.locator-progress-head strong {
+  color: var(--text); font-size: 0.86rem; flex: 0 0 auto;
+}
+.locator-progress-track {
+  height: 8px; overflow: hidden; background: #0f172a;
+  border: 1px solid #1f2937; border-radius: 999px;
+}
+.locator-progress-track div {
+  height: 100%; background: linear-gradient(90deg, var(--accent), #60a5fa);
+  border-radius: inherit; transition: width 240ms ease;
+}
+.locator-bulkbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 14px; padding: 10px 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.locator-bulkbar span {
+  color: var(--text-dim); font-size: 0.82rem; margin-right: auto;
+}
 
 .locator-grid {
   display: grid;
@@ -515,7 +546,7 @@ body {
   gap: 14px;
 }
 .locator-clip {
-  display: block; width: 100%; text-align: left; color: var(--text);
+  position: relative; display: block; width: 100%; text-align: left; color: var(--text);
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 8px; overflow: hidden; cursor: pointer;
   transition: transform .15s, border-color .15s, background .15s;
@@ -525,6 +556,19 @@ body {
 }
 .locator-clip.locator-hit { border-left: 3px solid var(--accent); }
 .locator-clip.locator-miss { border-left: 3px solid var(--text-dim); }
+.locator-clip.locator-selected {
+  border-color: #2563eb; box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.55);
+}
+.locator-select {
+  position: absolute; z-index: 2; top: 8px; left: 8px;
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148, 163, 184, 0.28);
+  color: #e5e7eb; border-radius: 5px; padding: 4px 7px;
+  font-size: 0.72rem; font-weight: 700; cursor: pointer;
+}
+.locator-select input {
+  width: 14px; height: 14px; accent-color: var(--accent);
+}
 
 .locator-thumb {
   height: 160px; background: #111; display: flex; align-items: center; justify-content: center;
@@ -683,6 +727,7 @@ body {
   .app-nav { width: 100%; margin-left: 0; overflow-x: auto; }
   .locator-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .locator-toolbar select { min-width: 100%; }
+  .locator-bulkbar span { width: 100%; margin-right: 0; }
   .locator-preview-head { flex-direction: column; }
   .locator-candidates { grid-template-columns: 1fr; }
   .locator-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

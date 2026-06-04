@@ -98,6 +98,9 @@ def create_model_run(video_id: str | None = None, source_video_id: str | None = 
         "started_at": "",
         "finished_at": "",
         "error": "",
+        "progress_percent": 0,
+        "progress_stage": "queued",
+        "progress_message": "等待开始模型剪辑",
         "clip_count": 0,
         "visible_clip_count": 0,
         "behavior_distribution": {},
@@ -118,9 +121,8 @@ def execute_model_run(run_id: str):
         return
 
     started = time.perf_counter()
-    record["status"] = "running"
-    record["started_at"] = _now()
-    _write_run(record)
+    record.update({"status": "running", "started_at": _now()})
+    _set_progress(record, 5, "preparing", "准备读取视频")
 
     try:
         video_id = record["video_id"]
@@ -133,9 +135,12 @@ def execute_model_run(run_id: str):
             raise RuntimeError("视频文件不存在")
 
         clips_dir = RESULTS_DIR / f"{run_id}_clips"
+        _set_progress(record, 10, "splitting", "正在生成候选剪辑片段")
         clip_count = _split_video_for_model(video_path, clips_dir, run_id)
         if clip_count <= 0:
             raise RuntimeError("没有生成模型候选剪辑")
+        record["clip_count"] = clip_count
+        _set_progress(record, 30, "detecting", f"已生成 {clip_count} 个候选片段，开始模型识别")
 
         output = RESULTS_DIR / f"{run_id}.json"
         preview_dir = RESULTS_DIR / f"{run_id}_preview"
@@ -171,13 +176,19 @@ def execute_model_run(run_id: str):
         if completed.returncode != 0:
             stderr = completed.stderr.strip() or completed.stdout.strip()
             raise RuntimeError(stderr or "模型检测失败")
+        _set_progress(record, 75, "filtering", "模型识别完成，正在筛选行为片段")
 
         result = _read_json(output)
         clips = result.get("clips") if isinstance(result.get("clips"), list) else []
         visible = _visible_clips(clips)
+        record["clip_count"] = len(clips)
+        record["visible_clip_count"] = len(visible)
         reviewed_count = 0
         if review_enabled():
-            for clip in visible:
+            total_review = max(1, len(visible))
+            for index, clip in enumerate(visible, start=1):
+                percent = 75 + int((index - 1) / total_review * 20)
+                _set_progress(record, percent, "reviewing", f"Ollama 复核 {index}/{len(visible)}")
                 review = review_clip(clip)
                 clip.update(review)
                 if review.get("review_status") == "reviewed":
@@ -192,6 +203,7 @@ def execute_model_run(run_id: str):
             }
             output.write_text(json.dumps(result, ensure_ascii=False, indent=2))
             visible = _visible_clips([clip for clip in result["clips"] if isinstance(clip, dict)])
+        _set_progress(record, 95, "saving", "正在保存模型剪辑结果")
 
         distribution = Counter(str(_clip_display_label(clip)) for clip in visible)
 
@@ -207,6 +219,9 @@ def execute_model_run(run_id: str):
                 "review_model": review_model_name() if review_enabled() else "",
                 "reviewed_clip_count": reviewed_count,
                 "duration_seconds": round(time.perf_counter() - started, 1),
+                "progress_percent": 100,
+                "progress_stage": "done",
+                "progress_message": "模型剪辑完成",
             }
         )
         video["status"] = "done"
@@ -226,9 +241,19 @@ def execute_model_run(run_id: str):
                 "finished_at": _now(),
                 "error": str(exc),
                 "duration_seconds": round(time.perf_counter() - started, 1),
+                "progress_percent": 100,
+                "progress_stage": "failed",
+                "progress_message": "模型剪辑失败",
             }
         )
         _write_run(record)
+
+
+def _set_progress(record: dict[str, Any], percent: int, stage: str, message: str):
+    record["progress_percent"] = max(0, min(100, int(percent)))
+    record["progress_stage"] = stage
+    record["progress_message"] = message
+    _write_run(record)
 
 
 def _visible_clips(clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -303,6 +328,9 @@ def _summarize_run(record: dict[str, Any]) -> dict[str, Any]:
         "started_at": record.get("started_at", ""),
         "finished_at": record.get("finished_at", ""),
         "error": record.get("error", ""),
+        "progress_percent": int(record.get("progress_percent") or (100 if record.get("status") in {"done", "failed"} else 0)),
+        "progress_stage": record.get("progress_stage", record.get("status", "queued")),
+        "progress_message": record.get("progress_message", ""),
         "clip_count": int(record.get("clip_count") or 0),
         "visible_clip_count": int(record.get("visible_clip_count") or 0),
         "behavior_distribution": record.get("behavior_distribution", {}),
